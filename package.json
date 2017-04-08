@@ -1,0 +1,19 @@
+{
+  "name": "orbital-adventure-worlds",
+  "version": "0.0.0",
+  "description": "Worlds manager for orbital adventure",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stavenko/orbital-adventure-world.git"
+  },
+  "author": "Vasiliy G. Stavenko",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/stavenko/orbital-adventure-world/issues"
+  },
+  "homepage": "https://github.com/stavenko/orbital-adventure-world#readme"
+}
