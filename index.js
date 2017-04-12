@@ -3,17 +3,71 @@ import jpegJs from 'jpeg-js';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
+import bodyParser from 'body-parser';
+import * as WorldManager from './WorldManager.js';
 
 let app = express();
-const dir = '/Users/vasilijstavenko/projects/';
-const filesDir = path.join(dir, 'data');
 
-const goodFileName = path.join(filesDir, 'synth.jpg'); 
-const binFileName = path.join(filesDir, 'synth.raw'); 
+
+app.use(bodyParser.json()); 
+
+
+
+
+app.get('/get-list',(req,res)=>{
+  WorldManager.getWorldList(content=>{
+    console.log(content);
+    res.end(content)
+  });
+})
+
+
+app.post('/create-world', (req, res)=>{
+  WorldManager.createWorld(req.body, end);
+  function end(systemId){
+    res.end(systemId);
+  }
+})
+
+
+app.post('/generate-texture/',(req,res)=>{
+  let {planet} = req.body;
+  WorldManager.retrievePlanetDescription(planet, generateTexture(req.body))
+
+  function generateTexture(params){
+    return planet=>{
+      TextureGenerator.generateTexture(planet, params, status=>{
+        res.send(status)
+      })
+
+    }
+  }
+})
+
+app.get('/texture/:planetUUID/:textureType/:lod/:tile.raw',(req, res)=>{
+  let file = WorldManager.getTextureFilename(req.params);
+  fs.access(file, err=>{
+    if(err) return res.status(404).send('not found');
+    res.sendFile(file);
+  })
+});
 
 app.get('/', (req, res)=>{
   res.send("I'm working, it's fine");
 })
+
+
+app.listen(8082,()=>{
+  console.log("listening...");
+})
+
+
+function monad(fn){
+  return (err, ...args)=>{
+    if(err) throw err;
+    fn(...args);
+  }
+}
 
 
 app.get('/bin-create/', (req,res) =>{
@@ -93,11 +147,5 @@ app.get('/jpg-create', (req, res)=>{
 })
 
 app.get('/jpg', (req, res)=>{
-  // let file = path.join(dir, 'orbital-adventure-data/textures/Earth.png');
   res.sendFile(goodFileName);
 })
-
-app.listen(8082,()=>{
-  console.log("listening...");
-})
-
