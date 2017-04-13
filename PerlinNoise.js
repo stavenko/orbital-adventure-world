@@ -9,18 +9,25 @@
  * It is assumed to have a random() method.
  */
 export class ClassicalNoise  { // Classic Perlin noise in 3D, for comparison 
-	if (r == undefined) r = Math;
-  this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0], 
-                                 [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1], 
-                                 [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]]; 
-  this.p = [];
-  for (var i=0; i<256; i++) {
-	  this.p[i] = Math.floor(r.random()*256);
-  }
-  // To remove the need for index wrapping, double the permutation table length 
-  this.perm = []; 
-  for(var i=0; i<512; i++) {
-		this.perm[i]=this.p[i & 255];
+  constructor(table){
+    if (table === undefined){
+      this.p = [];
+      for (var i=0; i<256; i++) {
+        this.p[i] = Math.floor(Math.random()*256);
+      }
+    }else{
+      console.log("===init with table===");
+      this.p = table;
+    }
+
+    this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0], 
+                                   [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1], 
+                                   [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]]; 
+    // To remove the need for index wrapping, double the permutation table length 
+    this.perm = []; 
+    for(var i=0; i<512; i++) {
+      this.perm[i]=this.p[i & 255];
+    }
   }
 };
 

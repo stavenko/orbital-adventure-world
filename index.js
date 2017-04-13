@@ -4,7 +4,9 @@ import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
 import bodyParser from 'body-parser';
+import {getTextureFilename} from './utils.js';
 import * as WorldManager from './WorldManager.js';
+import * as TextureGenerator from './TextureCreator.js';
 
 let app = express();
 
@@ -12,11 +14,8 @@ let app = express();
 app.use(bodyParser.json()); 
 
 
-
-
 app.get('/get-list',(req,res)=>{
   WorldManager.getWorldList(content=>{
-    console.log(content);
     res.end(content)
   });
 })
@@ -31,8 +30,8 @@ app.post('/create-world', (req, res)=>{
 
 
 app.post('/generate-texture/',(req,res)=>{
-  let {planet} = req.body;
-  WorldManager.retrievePlanetDescription(planet, generateTexture(req.body))
+  let {planetUUID} = req.body;
+  WorldManager.retrievePlanetDescription(planetUUID, generateTexture(req.body))
 
   function generateTexture(params){
     return planet=>{
@@ -44,8 +43,9 @@ app.post('/generate-texture/',(req,res)=>{
   }
 })
 
-app.get('/texture/:planetUUID/:textureType/:lod/:tile.raw',(req, res)=>{
-  let file = WorldManager.getTextureFilename(req.params);
+app.get('/texture/:planetUUID/:textureType/:lod/:face/:tile.raw',(req, res)=>{
+  let file = getTextureFilename(req.params);
+  console.log("check" ,file);
   fs.access(file, err=>{
     if(err) return res.status(404).send('not found');
     res.sendFile(file);

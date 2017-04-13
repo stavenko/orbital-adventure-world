@@ -1,7 +1,10 @@
 var webpack = require("webpack");
 // var CopyWebpackPlugin = require('copy-webpack-plugin');
 module.exports = {
-  entry: './index.js',
+  entry: {
+    application:'./index.js',
+    worker: './GeneratorWorker.js'
+  },
   target: 'node',
   devtool: 'source-map',
   module: {
@@ -23,7 +26,7 @@ module.exports = {
   output: {
     path: __dirname + '/build/app/',
     publicPath: "/app/",
-    filename: 'application.js',
+    filename: '[name].js',
   }
 };
 

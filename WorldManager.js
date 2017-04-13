@@ -1,10 +1,12 @@
 import path from 'path';
 import fs from 'fs';
 import {writeFileInDir} from './fsUtils.js';
+import {generateSystemId} from './utils.js';
 import async from 'async'
+import config from './config.json';
 
-const dir = '/home/azl/projects/';
-const filesDir = path.join(dir, 'data');
+const dir = config.rootDir;
+export const filesDir = path.join(dir, 'data');
 
 export function createWorld(worldCandidate, end){
   let systemId = null;
@@ -15,6 +17,11 @@ export function createWorld(worldCandidate, end){
     for(let i =0; i < worldCandidate.planets.length; ++i){
       worldCandidate.planets[i].uuid = generateSystemId();
       worldCandidate.planets[i].systemId = systemId;
+      worldCandidate.planets[i].seed = Math.random();
+      let table = [];
+      for(let c = 0; c < 256; ++c) 
+        table.push(Math.floor(Math.random() * 256));
+      worldCandidate.planets[i].table = table;
     }
 
     let starSystem = path.join(filesDir, '/systems/', `${systemId}.json`);
@@ -50,16 +57,9 @@ export function getWorldList(cb){
 }
 
 export function retrievePlanetDescription(uuid, cb){
+  let file = path.join(filesDir, 'planets', uuid, 'description.json');
+  fs.readFile(file, 'utf-8', (err,contents)=>cb(contents));
   
 }
 
-export function getTextureFilename({planetUUID, textureType, lod, tile}){
-  return path.join(filesDir, 'planets', planetUUID, textureType, lod, `${tile}.raw`);
-}
 
-function generateSystemId(){
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-    return v.toString(16);
-  });
-}
