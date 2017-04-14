@@ -16,18 +16,26 @@ export class ClassicalNoise  { // Classic Perlin noise in 3D, for comparison
         this.p[i] = Math.floor(Math.random()*256);
       }
     }else{
-      console.log("===init with table===");
       this.p = table;
     }
 
     this.grad3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0], 
-                                   [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1], 
-                                   [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]]; 
+                  [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1], 
+                  [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]]; 
+    this.grad3f = new Float32Array([
+                  1,1,0,-1,1,0,1,-1,0,-1,-1,0, 
+                  1,0,1,-1,0,1,1,0,-1,-1,0,-1, 
+                  0,1,1,0,-1,1,0,1,-1,0,-1,-1]);
+
     // To remove the need for index wrapping, double the permutation table length 
     this.perm = []; 
+    this.permf = new Float32Array(512);
     for(var i=0; i<512; i++) {
       this.perm[i]=this.p[i & 255];
+      this.permf[i] = this.p[i&255];
     }
+    this.gi = new Int32Array(8);
+    this.norm = new Float32Array(8);
   }
 };
 
@@ -44,6 +52,97 @@ ClassicalNoise.prototype.fade = function(t) {
 };
 
   // Classic Perlin noise, 3D version 
+ClassicalNoise.prototype.noiseF = function(x, y, z) { 
+  var X = Math.floor(x); 
+  var Y = Math.floor(y); 
+  var Z = Math.floor(z); 
+  
+  // Get relative xyz coordinates of point within that cell 
+  x = x - X; 
+  y = y - Y; 
+  z = z - Z; 
+  
+  // Wrap the integer cells at 255 (smaller integer period can be introduced here) 
+  X = X & 255; 
+  Y = Y & 255; 
+  Z = Z & 255;
+  
+
+  // Calculate a set of eight hashed gradient indices 
+
+  this.gi[0]= 3*(this.permf[X+this.permf[Y+this.permf[Z]]] % 12); 
+  this.gi[1]= 3*(this.permf[X+this.permf[Y+this.permf[Z+1]]] % 12); 
+  this.gi[2]= 3*(this.permf[X+this.permf[Y+1+this.permf[Z]]] % 12); 
+  this.gi[3]= 3*(this.permf[X+this.permf[Y+1+this.permf[Z+1]]] % 12); 
+  this.gi[4]= 3*(this.permf[X+1+this.permf[Y+this.permf[Z]]] % 12); 
+  this.gi[5]= 3*(this.permf[X+1+this.permf[Y+this.permf[Z+1]]] % 12); 
+  this.gi[6]= 3*(this.permf[X+1+this.permf[Y+1+this.permf[Z]]] % 12); 
+  this.gi[7]= 3*(this.permf[X+1+this.permf[Y+1+this.permf[Z+1]]] % 12); 
+  /*
+  var gi000 = this.perm[X+this.perm[Y+this.perm[Z]]] % 12; 
+  var gi001 = this.perm[X+this.perm[Y+this.perm[Z+1]]] % 12; 
+  var gi010 = this.perm[X+this.perm[Y+1+this.perm[Z]]] % 12; 
+  var gi011 = this.perm[X+this.perm[Y+1+this.perm[Z+1]]] % 12; 
+  var gi100 = this.perm[X+1+this.perm[Y+this.perm[Z]]] % 12; 
+  var gi101 = this.perm[X+1+this.perm[Y+this.perm[Z+1]]] % 12; 
+  var gi110 = this.perm[X+1+this.perm[Y+1+this.perm[Z]]] % 12; 
+  var gi111 = this.perm[X+1+this.perm[Y+1+this.perm[Z+1]]] % 12; 
+ */
+  
+  // The gradients of each corner are now: 
+  // g000 = grad3[gi000]; 
+  // g001 = grad3[gi001]; 
+  // g010 = grad3[gi010]; 
+  // g011 = grad3[gi011]; 
+  // g100 = grad3[gi100]; 
+  // g101 = grad3[gi101]; 
+  // g110 = grad3[gi110]; 
+  // g111 = grad3[gi111]; 
+  // Calculate noise contributions from each of the eight corners 
+  this.norm[0] = this.grad3f[this.gi[0]] * x +  this.grad3f[this.gi[0]+1]* y + this.grad3f[this.gi[0]+2] * z; 
+  this.norm[1] = this.grad3f[this.gi[1]] * (x-1) +  this.grad3f[this.gi[1]+1]* y + this.grad3f[this.gi[1]+2] * z; 
+  this.norm[2] = this.grad3f[this.gi[2]] * x +  this.grad3f[this.gi[2]+1]* (y-1) + this.grad3f[this.gi[2]+2] * z; 
+
+  this.norm[3] = this.grad3f[this.gi[3]] * (x-1) +  this.grad3f[this.gi[3]+1]* (y-1) + this.grad3f[this.gi[3]+2] * z; 
+  this.norm[4] = this.grad3f[this.gi[4]] * x +  this.grad3f[this.gi[4]+1]* y + this.grad3f[this.gi[4]+2] * (z-1); 
+  this.norm[5] = this.grad3f[this.gi[5]] * (x-1) +  this.grad3f[this.gi[5]+1]* y + this.grad3f[this.gi[5]+2] * (z-1); 
+
+  this.norm[6] = this.grad3f[this.gi[6]] * x +  this.grad3f[this.gi[6]+1]* (y-1) + this.grad3f[this.gi[6]+2] * (z-1); 
+  this.norm[7] = this.grad3f[this.gi[7]] * (x-1) +  this.grad3f[this.gi[7]+1]* (y-1) + this.grad3f[this.gi[7]+2] * (z-1); 
+
+  /*
+  0   var n000= this.dot(this.grad3[gi000], x, y, z); 
+  1   var n100= this.dot(this.grad3[gi100], x-1, y, z); 
+  2   var n010= this.dot(this.grad3[gi010], x, y-1, z); 
+
+  3   var n110= this.dot(this.grad3[gi110], x-1, y-1, z); 
+  4   var n001= this.dot(this.grad3[gi001], x, y, z-1); 
+  5   var n101= this.dot(this.grad3[gi101], x-1, y, z-1); 
+
+  6   var n011= this.dot(this.grad3[gi011], x, y-1, z-1); 
+  7   var n111= this.dot(this.grad3[gi111], x-1, y-1, z-1); 
+   *
+   * */
+  // Compute the fade curve value for each of x, y, z 
+  var u = this.fade(x); 
+  var um = 1-u;
+  var v = this.fade(y); 
+  var vm = 1-v
+  var w = this.fade(z); 
+  var wm = 1-w;
+   // Interpolate along x the contributions from each of the corners 
+  var nx00 = um*this.norm[0] + u * this.norm[1];//this.mix(n000, n100, u); 
+  var nx01 = um*this.norm[1] + u * this.norm[5]; //this.mix(n001, n101, u); 
+  var nx10 = um*this.norm[2] + u * this.norm[3]; //this.mix(n010, n110, u); 
+  var nx11 = um*this.norm[6] + u * this.norm[7]; //this.mix(n011, n111, u); 
+  // Interpolate the four results along y 
+  var nxy0 = vm * nx00 + v * nx10;
+  var nxy1 = vm * nx01 + v * nx11;
+  // Interpolate the two last results along z 
+  var nxyz = wm * nxy0 + w * nxy1;
+
+  return nxyz; 
+}
 ClassicalNoise.prototype.noise = function(x, y, z) { 
   // Find unit grid cell containing point 
   var X = Math.floor(x); 

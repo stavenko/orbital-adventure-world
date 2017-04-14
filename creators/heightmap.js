@@ -8,9 +8,14 @@ import {writeFileInDir} from '../fsUtils.js';
 
 let TextureSize = 2048;
 
+function reducer(x){
+  return 1/Math.pow(2,x);
+}
+
 export function create(input, callback){
   let {planet, params} = input;
   let {lod, face, tile} = params;
+  console.log('create' ,lod, face, tile);
   let {radius} = planet;
   let surfaceArea = 4.0 * Math.PI * Math.pow(radius, 2);
   let division = Math.pow(2, lod);
@@ -21,40 +26,56 @@ export function create(input, callback){
   let t = T / division;
 
   let generator = new ClassicalNoise(planet.table);
-
   let ab = new Buffer(TextureSize*TextureSize * 4);
 
+  let levels = [0,1,2,3,4,5,6,7,8];
+
+  let _arrayStart = Date.now();
+  let _avgNoise = [];
   for(let i =0; i < TextureSize; ++i){
     for(let j =0; j < TextureSize; ++j){
       let ts = i / TextureSize / division;
       let tt = j / TextureSize / division;
       let normal = stToNormal(s+ts, t+tt, face)
       let [x,y,z] = normal;
-      let length = Math.sqrt(x*x + y*y + z*z);
-      normal = normal.map(x=>x/length*2);
+      let normalLength = Math.sqrt(x*x + y*y + z*z);
+      // normal = normal.map(x=>x/length);
+      let heightValue = 0;
 
-      let noiseLevel =  (generator.noise(...normal)+1)/2;
+      let _noiseStart = Date.now();
+      for(let cc = 0; cc < levels.length; ++cc){
+        let l = levels[cc];
+        let ll = Math.pow(2,l+lod)/normalLength;
+        let noiseLevel =  generator.noise(normal[0]*ll, normal[1]*ll, normal[2]*ll);
+        noiseLevel *= reducer(l);
+        heightValue += noiseLevel;
+      }
 
-      let theta = Math.atan2(y, x) / (Math.PI);
-      let r = Math.hypot(x, y) ;
-      let phi = Math.atan2(z, r)/(Math.PI/2);
+      _avgNoise.push(Date.now() - _noiseStart);
 
       let ix = (j*TextureSize + i)*4;
-      ab[ix] = (noiseLevel+1)*0.5*255;// (theta + 1)/2 * 255;
-      ab[ix+1] =(noiseLevel+1)*0.5*255 //; Math.abs(phi) * 255;
-      ab[ix+2] = (noiseLevel+1)*0.5*255;
+      ab[ix] = (heightValue+1)*0.5*255;// (theta + 1)/2 * 255;
+      ab[ix+1] =(heightValue+1)*0.5*255 //; Math.abs(phi) * 255;
+      ab[ix+2] = (heightValue+1)*0.5*255;
       ab[ix+3] = 255;
     }
   }
+  let l = _avgNoise.length;
+  let n = _avgNoise.reduce((a,b)=>a+b);
+  console.log('avg noise calc', n/l);
+  console.log("array time", Date.now() - _arrayStart);
   let gz = zlib.createGzip();
 
   let filePath = getTextureFilename({planetUUID:planet.uuid, textureType:'height', lod, tile, face});
 
+  let _zipStart = Date.now();
   zlib.deflate(ab, {level:9}, (err, buffer)=>{
     if(err) throw err;
-    console.log("writing file to ", filePath);
+    // console.log("writing file to ", filePath);
     writeFileInDir(filePath, buffer, err=>{
+
       if(err) throw err;
+      console.log("zipping done", Date.now() - _zipStart)
       callback(null);
       
     });

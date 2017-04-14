@@ -45,7 +45,7 @@ app.post('/generate-texture/',(req,res)=>{
 
 app.get('/texture/:planetUUID/:textureType/:lod/:face/:tile.raw',(req, res)=>{
   let file = getTextureFilename(req.params);
-  console.log("check" ,file);
+  // console.log("check" ,file);
   fs.access(file, err=>{
     if(err) return res.status(404).send('not found');
     res.sendFile(file);
