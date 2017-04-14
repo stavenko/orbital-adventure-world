@@ -12,6 +12,7 @@ function reducer(x){
   return 1/Math.pow(2,x);
 }
 
+const SAMPLES = 8;
 export function create(input, callback){
   let {planet, params} = input;
   let {lod, face, tile} = params;
@@ -19,8 +20,8 @@ export function create(input, callback){
   let {radius} = planet;
   let surfaceArea = 4.0 * Math.PI * Math.pow(radius, 2);
   let division = Math.pow(2, lod);
-  let S = Math.floor(tile / division);
-  let T = tile % division;
+  let T = Math.floor(tile / division);
+  let S = tile % division;
 
   let s = S / division;
   let t = T / division;
@@ -43,11 +44,11 @@ export function create(input, callback){
       let heightValue = 0;
 
       let _noiseStart = Date.now();
-      for(let cc = 0; cc < levels.length; ++cc){
-        let l = levels[cc];
+      for(let cc = 0; cc < SAMPLES; ++cc){
+        let l = cc+lod;
         let ll = Math.pow(2,l+lod)/normalLength;
         let noiseLevel =  generator.noise(normal[0]*ll, normal[1]*ll, normal[2]*ll);
-        noiseLevel *= reducer(l);
+        noiseLevel *= 1/Math.pow(2, l);
         heightValue += noiseLevel;
       }
 
