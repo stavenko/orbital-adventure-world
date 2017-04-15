@@ -12,7 +12,18 @@ let app = express();
 
 
 app.use(bodyParser.json()); 
+app.use(bodyParser.urlencoded({ extended: false })); 
 
+
+// app.post('/*', (req,res, next)=>{
+  // res.setHeader("Access-Control-Allow-Origin", "*");
+  // next();
+// })
+
+app.all('/*', (req,res, next)=>{
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  next();
+})
 
 app.get('/get-list',(req,res)=>{
   WorldManager.getWorldList(content=>{
@@ -22,7 +33,9 @@ app.get('/get-list',(req,res)=>{
 
 
 app.post('/create-world', (req, res)=>{
-  WorldManager.createWorld(req.body, end);
+  console.log(req.body.json);
+  let object = JSON.parse(req.body.json);
+  WorldManager.createWorld(object, end);
   function end(systemId){
     res.end(systemId);
   }
@@ -30,8 +43,9 @@ app.post('/create-world', (req, res)=>{
 
 
 app.post('/generate-texture/',(req,res)=>{
-  let {planetUUID} = req.body;
-  WorldManager.retrievePlanetDescription(planetUUID, generateTexture(req.body))
+  let object = JSON.parse(req.body.json)
+  let {planetUUID} = object;
+  WorldManager.retrievePlanetDescription(planetUUID, generateTexture(object))
 
   function generateTexture(params){
     return planet=>{

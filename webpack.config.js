@@ -23,6 +23,9 @@ module.exports = {
       {test: /\.ts$/, loader: "ts"},
     ]
   },
+  devServer: {
+    headers: { "Access-Control-Allow-Origin": "*" }
+  },
   output: {
     path: __dirname + '/build/app/',
     publicPath: "/app/",
