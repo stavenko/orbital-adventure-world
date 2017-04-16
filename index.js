@@ -14,12 +14,6 @@ let app = express();
 app.use(bodyParser.json()); 
 app.use(bodyParser.urlencoded({ extended: false })); 
 
-
-// app.post('/*', (req,res, next)=>{
-  // res.setHeader("Access-Control-Allow-Origin", "*");
-  // next();
-// })
-
 app.all('/*', (req,res, next)=>{
   res.setHeader("Access-Control-Allow-Origin", "*");
   next();
@@ -33,7 +27,6 @@ app.get('/get-list',(req,res)=>{
 
 
 app.post('/create-world', (req, res)=>{
-  console.log(req.body.json);
   let object = JSON.parse(req.body.json);
   WorldManager.createWorld(object, end);
   function end(systemId){
@@ -59,7 +52,6 @@ app.post('/generate-texture/',(req,res)=>{
 
 app.get('/texture/:planetUUID/:textureType/:lod/:face/:tile.raw',(req, res)=>{
   let file = getTextureFilename(req.params);
-  // console.log("check" ,file);
   fs.access(file, err=>{
     if(err) return res.status(404).send('not found');
     res.sendFile(file);
