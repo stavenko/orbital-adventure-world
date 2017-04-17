@@ -25,6 +25,13 @@ app.get('/get-list',(req,res)=>{
   });
 })
 
+app.post('/get-task-list-state', (req,res)=>{
+  let uuids = JSON.parse(req.body.json)
+  let states = TextureGenerator.getProcessStates(uuids);
+  res.end(JSON.stringify(states));
+
+})
+
 
 app.post('/create-world', (req, res)=>{
   let object = JSON.parse(req.body.json);
@@ -42,8 +49,8 @@ app.post('/generate-texture/',(req,res)=>{
 
   function generateTexture(params){
     return planet=>{
-      TextureGenerator.generateTexture(planet, params, status=>{
-        res.send(status)
+      TextureGenerator.generateTexture(planet, params, (err,uuid)=>{
+        res.send(uuid)
       })
 
     }

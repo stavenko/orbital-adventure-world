@@ -6,26 +6,42 @@ const TextureSize = 2048
 
 const childProcess = child_process.fork('./worker.js');
 const callbackMap = {}
+const processState = {};
 const processQueue = [];
 let busy = false;
 
+
+
 childProcess.on('message', function(event){
-  // let data = event.data;
   if(event.type == 'completed'){
     busy = false;
-    let cb = callbackMap[event.uuid];
-    delete callbackMap[event.uuid];
-    if(cb) cb(event);
+    processState[event.uuid] = 'completed';
     tryPutNextTask();
   }
 });
 
+export function getProcessStates(processes){
+  let result = {}
+  for(let i =0 ;i <processes.length; ++i){
+    let pr = processes[i];
+    if(!processState[pr]) result[pr] = 'notfound';
+    else{
+      result[pr] = processState[pr];
+      if(processState[pr] === 'completed')
+        delete processState[pr]
+    }
+  }
+  return result;
+}
+
 export function generateTexture(planet, params, callback){
   let uuid = generateSystemId();
   callbackMap[uuid] = callback;
+  processState[uuid] = 'queued';
   planet = JSON.parse(planet);
   processQueue.push({planet, params, uuid});
   tryPutNextTask();
+  callback(null, uuid);
 }
 
 function tryPutNextTask(){
@@ -33,6 +49,7 @@ function tryPutNextTask(){
 
   let obj = processQueue.shift();
   busy = true;
+  processState[obj.uuid] = 'running'
   childProcess.send(obj);
 }
 
