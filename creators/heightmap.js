@@ -74,6 +74,7 @@ function createZeroLod(input, callback){
 export function create(input, callback){
   let {lod, face, tile} = input.params;
   if(lod == 0) return createZeroLod(input, callback);
+  console.log('==create' ,`lod:${lod}, face:${face}, tile:${tile}`);
 
   let prevLod = lod - 1;
   let division = Math.pow(2, lod);
@@ -82,6 +83,7 @@ export function create(input, callback){
   let S = tile % division;
   let s = S / division;
   let t = T / division;
+  console.log('lod', lod, prevLod, T, S, tile);
   S = s * prevDivision;
   T = t * prevDivision;
   let tileS = S - Math.floor(S);
@@ -89,6 +91,7 @@ export function create(input, callback){
   let tileNum = Math.floor(T) * prevDivision + Math.floor(S);
 
   let filePath = getTextureFilename({planetUUID:input.planet.uuid, textureType:'height', lod:lod-1, tile:tileNum, face});
+
    
   zipper.inflateFrom(filePath, createTileUppersLods(input,{
     tile: tileNum,
@@ -123,7 +126,6 @@ function createTileUppersLods(input, prevTile, callback){
 
     let s = S / division; // this texture start
     let t = T / division; 
-    // for(let i = 0; i < 100; ++i)
     console.log('create' ,`T:${T}, S:${S}, t:${t}, s:${s}`);
 
 
@@ -131,28 +133,20 @@ function createTileUppersLods(input, prevTile, callback){
     let ab = new Buffer(TextureSize*TextureSize * 4);
 
     let addColor = [0,0,0,0]
-    //if(eq(S, 0) && eq(T, 0))addColor[0]=30;
-    //if(eq(S, 1) && eq(T, 0))addColor[1]=30;
-    //if(eq(S, 0) && eq(T, 1))addColor[2]=30;
-    //if(eq(S, 1) && eq(T, 1)){addColor[2]=30, addColor[1]=30};
 
     for(let i =0; i < TextureSize; ++i){
       for(let j =0; j < TextureSize; ++j){
-        let ts = i / TextureSize / division;
-        let tt = j / TextureSize / division;
+        let ts = j / TextureSize / division;
+        let tt = i / TextureSize / division;
         let normal = stToNormal(s+ts, t+tt, face)
         let [x,y,z] = normal;
         let normalLength = Math.sqrt(x*x + y*y + z*z);
         let heightValue = 0;
 
         // calculate prev texture coords;
-        let J = Math.floor((t+tt-prevTile.t) * prevTile.division * TextureSize);
-        let I = Math.floor((s+ts-prevTile.s) * prevTile.division * TextureSize);
+        let I = Math.floor((t+tt-prevTile.t) * prevTile.division * TextureSize);
+        let J = Math.floor((s+ts-prevTile.s) * prevTile.division * TextureSize);
         let prevIx = (J * TextureSize + I )*4;
-        //if(T == 1 || S == 1)
-          //console.log('calc', t, s, `${tt}x${ts}`, `${prevTile.t}x${prevTile.s}`,`${I}x${J}`, `${i}x${j}`);
-
-        // let's take average of
         
         
         let ix = (j*TextureSize + i) * 4;
