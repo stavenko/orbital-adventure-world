@@ -14,9 +14,9 @@ export function inflateFrom(path, callback){
 }
 
 export function deflateTo(filePath, buffer, callback){
-  zlib.deflate(buffer, {level:9}, (err, buffer)=>{
+  zlib.deflate(buffer, {level:9}, (err, buf)=>{
     if(err) throw err;
-    writeFileInDir(filePath, buffer, err=>{
+    writeFileInDir(filePath, buf, err=>{
       if(err) throw err;
       callback(null);
     });

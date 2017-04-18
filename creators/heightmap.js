@@ -7,7 +7,7 @@ import {getTextureFilename} from '../utils.js';
 import {writeFileInDir} from '../fsUtils.js';
 import * as zipper from './zipper';
 
-let TextureSize = 2048;
+let TextureSize = 512;
 
 function reducer(x){
   return 1/Math.pow(2,x);
@@ -29,7 +29,8 @@ function createZeroLod(input, callback){
   let t = T / division;
 
   let generator = new ClassicalNoise(planet.table);
-  let ab = new Buffer(TextureSize*TextureSize * 4);
+  let ab = new Float32Array(TextureSize * TextureSize);
+  // let ab = new Buffer(TextureSize*TextureSize * 4);
 
   let levels = [0,1,2,3,4,5,6,7,8];
 
@@ -56,19 +57,22 @@ function createZeroLod(input, callback){
 
       _avgNoise.push(Date.now() - _noiseStart);
 
-      let ix = (j*TextureSize + i)*4;
-      ab[ix] = (heightValue+1)*0.5*255;// (theta + 1)/2 * 255;
-      ab[ix+1] =(heightValue+1)*0.5*255 //; Math.abs(phi) * 255;
-      ab[ix+2] = (heightValue+1)*0.5*255;
-      ab[ix+3] = 255;
+      let ix = (j*TextureSize + i); // *4;
+      ab[ix] = heightValue;
+      //ab[ix] = (heightValue+1)*0.5*255;// (theta + 1)/2 * 255;
+      //ab[ix+1] =(heightValue+1)*0.5*255 //; Math.abs(phi) * 255;
+      //ab[ix+2] = (heightValue+1)*0.5*255;
+      //ab[ix+3] = 255;
     }
   }
   let l = _avgNoise.length;
   let n = _avgNoise.reduce((a,b)=>a+b);
   console.log('avg noise calc', n/l);
   console.log("array time", Date.now() - _arrayStart);
+  let buffer = Buffer.from(ab.buffer);
+  console.log("buffer size", buffer.length);
   let filePath = getTextureFilename({planetUUID:planet.uuid, textureType:'height', lod, tile, face});
-  zipper.deflateTo(filePath, ab, callback);
+  zipper.deflateTo(filePath, buffer, callback);
 }
 
 export function create(input, callback){
@@ -111,9 +115,10 @@ function eq(a,b){
 }
 
 function createTileUppersLods(input, prevTile, callback){
-  return prevousTile=>{
+  return prevousTileBuffer=>{
     let {planet, params} = input;
     let {lod, face, tile} = params;
+    let prevousTile = new Float32Array(prevousTileBuffer.buffer);
     //if(lod == 2) {
       //console.log("skip 2");
       //return callback(null);
@@ -130,7 +135,7 @@ function createTileUppersLods(input, prevTile, callback){
 
 
     let generator = new ClassicalNoise(planet.table);
-    let ab = new Buffer(TextureSize*TextureSize * 4);
+    let ab = new Float32Array(TextureSize*TextureSize);
 
     let addColor = [0,0,0,0]
 
@@ -146,21 +151,24 @@ function createTileUppersLods(input, prevTile, callback){
         // calculate prev texture coords;
         let I = Math.floor((t+tt-prevTile.t) * prevTile.division * TextureSize);
         let J = Math.floor((s+ts-prevTile.s) * prevTile.division * TextureSize);
-        let prevIx = (J * TextureSize + I )*4;
+        let prevIx = (J * TextureSize + I ); // *4;
         
         
-        let ix = (j*TextureSize + i) * 4;
+        let ix = (j*TextureSize + i); // * 4;
 
-        ab[ix] = prevousTile[prevIx]+addColor[0];
-        ab[ix+1] = prevousTile[prevIx+1]+addColor[1];
-        ab[ix+2] = prevousTile[prevIx+2]+addColor[2];
-        ab[ix+3] = 255;
+        ab[ix] = prevousTile[prevIx]; //+addColor[0];
+        //ab[ix] = prevousTile[prevIx]+addColor[0];
+        //ab[ix+1] = prevousTile[prevIx+1]+addColor[1];
+        //ab[ix+2] = prevousTile[prevIx+2]+addColor[2];
+        //ab[ix+3] = 255;
       }
     }
 
     let filePath = getTextureFilename({planetUUID:planet.uuid, textureType:'height', lod, tile, face});
 
-    zipper.deflateTo(filePath, ab, (...args)=>{
+    let buffer = Buffer.from(ab.buffer);
+
+    zipper.deflateTo(filePath, buffer, (...args)=>{
       console.log("done");
       callback(...args)
     });
