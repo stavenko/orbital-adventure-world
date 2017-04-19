@@ -5,6 +5,7 @@ import config from '../config.json';
 import {ClassicalNoise} from '../PerlinNoise.js'; 
 import {getTextureFilename} from '../utils.js';
 import {writeFileInDir} from '../fsUtils.js';
+import {stToNormal} from './lookup.js';
 import * as zipper from './zipper';
 
 let TextureSize = 512;
@@ -30,7 +31,6 @@ function createZeroLod(input, callback){
 
   let generator = new ClassicalNoise(planet.table);
   let ab = new Float32Array(TextureSize * TextureSize);
-  // let ab = new Buffer(TextureSize*TextureSize * 4);
 
   let levels = [0,1,2,3,4,5,6,7,8];
 
@@ -45,7 +45,6 @@ function createZeroLod(input, callback){
       let normal = stToNormal(s+ts, t+tt, face)
       let [x,y,z] = normal;
       let normalLength = Math.sqrt(x*x + y*y + z*z);
-      // normal = normal.map(x=>x/length);
       let heightValue = 0;
 
       let _noiseStart = Date.now();
@@ -197,16 +196,3 @@ function createTileUppersLods(input, prevTile, callback){
 
 
 
-function stToNormal(s,t, face){
-  let ss = s * 2 - 1;
-  let tt = t * 2 - 1;
-
-  return [
-    [-1, -tt, ss], //back
-    [ss, -1, -tt], // left
-    [1, -tt,-ss], // front
-    [ss,  1, tt], // right
-    [ss, -tt, 1], // top
-    [-ss, -tt, -1], // bottom
-  ][face];
-}
