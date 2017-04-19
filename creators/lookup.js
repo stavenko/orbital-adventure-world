@@ -79,6 +79,8 @@ export function stToNormal(s,t, face){
 
 export function getTileProps(coords, lod){
   let {s,t, face} = coords;
+  if(s >= 1) s-=1e-10;
+  if(t >= 1) t-=1e-10;
   let division = Math.pow(2,lod);
   let size = 1/division;
   let J = Math.floor(s/size);
@@ -86,7 +88,7 @@ export function getTileProps(coords, lod){
   let tile = J*division + I;
   let inTileS = (s-(J*size))/size
   let inTileT = (t-(I*size))/size
-  return { tile, face, lod, s: J*size, t:I*size, inTileS, inTileT};
+  return { tile, face, lod, s: J*size, t:I*size, inTileS, inTileT,_coords:coords};
 }
 
 export function calculateTileProperties(face, lod, tile){

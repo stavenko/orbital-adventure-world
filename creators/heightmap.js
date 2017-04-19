@@ -19,7 +19,7 @@ const SAMPLES = 8;
 function createZeroLod(input, callback){
   let {planet, params} = input;
   let {lod, face, tile} = params;
-  console.log('create' ,`lod:${lod}, face:${face}, tile:${tile}`);
+  console.log('create heightMap' ,`lod:${lod}, face:${face}, tile:${tile}`);
   let {radius} = planet;
   let surfaceArea = 4.0 * Math.PI * Math.pow(radius, 2);
   let division = Math.pow(2, lod);
@@ -76,7 +76,7 @@ function createZeroLod(input, callback){
 export function create(input, callback){
   let {lod, face, tile} = input.params;
   if(lod == 0) return createZeroLod(input, callback);
-  console.log('==create' ,`lod:${lod}, face:${face}, tile:${tile}`);
+  console.log('==create heightMap' ,`lod:${lod}, face:${face}, tile:${tile}`);
 
   let prevLod = lod - 1;
   let division = Math.pow(2, lod);

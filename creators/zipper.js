@@ -3,6 +3,20 @@ import {writeFileInDir} from '../fsUtils.js';
 import fs from 'fs';
 
 
+export function inflateFromIfExists(path, callback){
+  fs.access(path, (err)=>{
+    if(err) return callback(err); 
+
+    let gz = zlib.createGzip();
+    fs.readFile(path, (err, content)=>{
+      if(err) throw err;
+      zlib.inflate(content, (err, buffer)=>{
+        callback(err, buffer);
+      })
+    })
+  });
+}
+
 export function inflateFrom(path, callback){
   let gz = zlib.createGzip();
   fs.readFile(path, (err, content)=>{
