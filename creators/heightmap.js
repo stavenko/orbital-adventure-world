@@ -36,6 +36,8 @@ function createZeroLod(input, callback){
 
   let _arrayStart = Date.now();
   let _avgNoise = [];
+  let SampleFrom = lod * SAMPLES;
+  let SampleTo = SampleFrom + SAMPLES;
   for(let i =0; i < TextureSize; ++i){
     for(let j =0; j < TextureSize; ++j){
       let ts = i / TextureSize / division;
@@ -47,22 +49,19 @@ function createZeroLod(input, callback){
       let heightValue = 0;
 
       let _noiseStart = Date.now();
-      for(let cc = 0; cc < SAMPLES; ++cc){
-        let l = cc+lod;
-        let ll = Math.pow(2,l+lod)/normalLength;
+      
+      for(let cc = SampleFrom; cc < SampleTo; ++cc){
+        let l = cc;
+        let ll = Math.pow(2,l)/normalLength;
         let noiseLevel =  generator.noise(normal[0]*ll, normal[1]*ll, normal[2]*ll);
-        noiseLevel *= 1/Math.pow(2, l);
+        noiseLevel *= 1/Math.pow(2,l);;
         heightValue += noiseLevel;
       }
 
       _avgNoise.push(Date.now() - _noiseStart);
 
-      let ix = (j*TextureSize + i); // *4;
+      let ix = (j*TextureSize + i); 
       ab[ix] = heightValue;
-      //ab[ix] = (heightValue+1)*0.5*255;// (theta + 1)/2 * 255;
-      //ab[ix+1] =(heightValue+1)*0.5*255 //; Math.abs(phi) * 255;
-      //ab[ix+2] = (heightValue+1)*0.5*255;
-      //ab[ix+3] = 255;
     }
   }
   let l = _avgNoise.length;
@@ -97,13 +96,23 @@ export function create(input, callback){
   let filePath = getTextureFilename({planetUUID:input.planet.uuid, textureType:'height', lod:lod-1, tile:tileNum, face});
 
    
-  zipper.inflateFrom(filePath, createTileUppersLods(input,{
+  let tup = createTileUppersLods(input,{
     tile: tileNum,
     s:Math.floor(S) / prevDivision,
     t:Math.floor(T) / prevDivision,
     tileSize: 1/prevDivision,
     division: prevDivision,
-  }, callback))
+  }, callback);
+
+  tup(new Buffer(TextureSize*TextureSize*4));
+
+  //zipper.inflateFrom(filePath, createTileUppersLods(input,{
+    //tile: tileNum,
+    //s:Math.floor(S) / prevDivision,
+    //t:Math.floor(T) / prevDivision,
+    //tileSize: 1/prevDivision,
+    //division: prevDivision,
+  //}, callback))
 
 
 }
@@ -125,8 +134,8 @@ function createTileUppersLods(input, prevTile, callback){
     //}
     console.log('create' ,`lod:${lod}, face:${face}, tile:${tile}`);
     let division = Math.pow(2, lod);
-    let T = Math.floor(tile / division);
-    let S = tile % division;
+    let S = Math.floor(tile / division);
+    let T = tile % division;
 
 
     let s = S / division; // this texture start
@@ -138,11 +147,13 @@ function createTileUppersLods(input, prevTile, callback){
     let ab = new Float32Array(TextureSize*TextureSize);
 
     let addColor = [0,0,0,0]
+    let SampleFrom = 0;//  lod * SAMPLES;
+    let SampleTo = SAMPLES+lod; //SampleFrom + SAMPLES;
 
     for(let i =0; i < TextureSize; ++i){
       for(let j =0; j < TextureSize; ++j){
-        let ts = j / TextureSize / division;
-        let tt = i / TextureSize / division;
+        let ts = i / TextureSize / division;
+        let tt = j / TextureSize / division;
         let normal = stToNormal(s+ts, t+tt, face)
         let [x,y,z] = normal;
         let normalLength = Math.sqrt(x*x + y*y + z*z);
@@ -152,11 +163,20 @@ function createTileUppersLods(input, prevTile, callback){
         let I = Math.floor((t+tt-prevTile.t) * prevTile.division * TextureSize);
         let J = Math.floor((s+ts-prevTile.s) * prevTile.division * TextureSize);
         let prevIx = (J * TextureSize + I ); // *4;
-        
+
+        for(let cc = SampleFrom; cc < SampleTo; ++cc){
+          let l = cc;
+          let ll = Math.pow(2,l)/normalLength;
+          let noiseLevel =  generator.noise(normal[0]*ll, normal[1]*ll, normal[2]*ll);
+          noiseLevel *= 1/Math.pow(2,l);
+          heightValue += noiseLevel;
+        }
         
         let ix = (j*TextureSize + i); // * 4;
+        // console.log(heightValue/prevousTile[prevIx]);
 
-        ab[ix] = prevousTile[prevIx]; //+addColor[0];
+        ab[ix] = heightValue; //+addColor[0];
+        //ab[ix] = prevousTile[prevIx] + heightValue; //+addColor[0];
         //ab[ix] = prevousTile[prevIx]+addColor[0];
         //ab[ix+1] = prevousTile[prevIx+1]+addColor[1];
         //ab[ix+2] = prevousTile[prevIx+2]+addColor[2];
