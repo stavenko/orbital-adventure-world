@@ -58,6 +58,9 @@ function createZeroLod(input, callback){
       }
 
       _avgNoise.push(Date.now() - _noiseStart);
+      //**************
+      heightValue = face;
+      /////////////////
 
       let ix = (j*TextureSize + i); 
       ab[ix] = heightValue;
