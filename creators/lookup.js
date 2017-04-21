@@ -29,19 +29,22 @@ function transformNegY(s,t, face){
 function transformPosZ(s,t, face){
     if(t >= 1) return {face: 1, t: t-1, s:s} // face: -y
     if(t  < 0) return {face: 3, t: 1+t, s:s} // face: +y
+
     if(s >= 1) return {face: 2, t: t, s:s-1} // face: +x
     if(s  < 0) return {face: 0, t: t, s:1+s} // face: -x
     return {face, s,t}
 }
+
 function transformNegZ(s,t, face){
-    if(t >= 1) return {face: 1, t: 2-t, s:1-s} // face: -z
-    if(t  < 0) return {face: 3, t: -t , s:1-s} // face: +z
+    if(t >= 1) return {face: 1, t: 2-t, s:1-s} // face: -y
+    if(t  < 0) return {face: 3, t: -t , s:1-s} // face: +y
+
     if(s >= 1) return {face: 0, t: t, s: s-1} // face: -x
     if(s  < 0) return {face: 2, t: t, s: 1+s} // face: +x
     return {face, s,t}
 }
 
-export function transformToCorrectFace(s,t, face){
+export function transformToCorrectFace(s, t, face){
   if(face == 2){
     return transformPosX(s,t,face)
   }
@@ -54,6 +57,7 @@ export function transformToCorrectFace(s,t, face){
   if(face == 3){
     return transformPosY(s,t,face)
   }
+  // switch
   if(face == 4){
     return transformNegZ(s,t,face)
   }
@@ -162,8 +166,8 @@ export function getTileProps(coords, lod){
 
 export function calculateTileProperties(face, lod, tile){
   let division = Math.pow(2, lod);
-  let T = Math.floor(tile / division);
-  let S = tile % division;
+  let S = Math.floor(tile / division);
+  let T = tile % division;
 
   let s = S / division;
   let t = T / division;

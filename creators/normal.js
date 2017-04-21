@@ -11,7 +11,7 @@ const COLORS = [
   [255, 255,0],
 
   [0, 255,0],
-  [0, 255,255],
+  [0, 255,255], // 3
 
   [0, 0,255],
   [255, 0, 255],
@@ -67,6 +67,7 @@ export function create(input, callback){
           let [di, dj] = vs[d];
           let {normal, height} = lookupAt(di, dj, thisTileProps);
           normal = normalize(normal);
+          height += 1;
           let hgt = [normal[0] * height, normal[1] *height, normal[2] *height];
           heights.push(hgt);
           HHH.push(height);
@@ -83,16 +84,33 @@ export function create(input, callback){
           heights[2][1] - heights[3][1],
           heights[2][2] - heights[3][2]];
 
-        let H = HHH[3];
-        let pnormal = normalize(cross(normalize(v1),normalize(v2)));
+        let H = HHH[4];
+        let pnormal = normalize(cross(normalize(v1), normalize(v2)));
+        let direction = dot(pnormal, heights[4]);
+
+        if(direction < 0){
+          pnormal = [pnormal[0] * -1, pnormal[1]*-1, pnormal[2]*-1];
+        }
         
+        // pnormal = normalize(heights[4])
         let ix = 3*(j * TextureSize + i);
-        let color = COLORS[Math.floor(H)];
+        if(i == 0) H = HHH[0];
+        if(i == 511) H = HHH[1];
+        if(j == 0) H = HHH[2];
+        if(j == 511) H = HHH[3];
+        let color = COLORS[Math.floor((H + 6)%6)];
+        if(!color) console.log(H);
 
         if(false){
-          normalMap[ix]   = Math.floor(255 *(pnormal[0] +1.0) / 2) ;
-          normalMap[ix+1] = Math.floor(255 *(pnormal[1] +1.0) / 2) ;
-          normalMap[ix+2] = Math.floor(255 *(pnormal[2] +1.0) / 2) ;
+          if(true){
+            normalMap[ix]   = Math.floor(255 *(H +1.0) / 2) ;
+            normalMap[ix+1] = Math.floor(255 *(H +1.0) / 2) ;
+            normalMap[ix+2] = Math.floor(255 *(H +1.0) / 2) ;
+          }else{
+            normalMap[ix]   = Math.floor(255 *(pnormal[0] +1.0) / 2) ;
+            normalMap[ix+1] = Math.floor(255 *(pnormal[1] +1.0) / 2) ;
+            normalMap[ix+2] = Math.floor(255 *(pnormal[2] +1.0) / 2) ;
+          }
         }else{
           normalMap[ix]   = color[0];
           normalMap[ix+1] = color[1];
@@ -111,18 +129,6 @@ export function create(input, callback){
     zipper.deflateTo(filePath, normalMap, callback);
   })
 
-  function normalize(v){
-    let l = Math.hypot(...v);
-    return [v[0]/l, v[1]/l, v[2]/l];
-  }
-
-  function cross([x,y,z], v){
-    return [
-      y*v[2] - z * v[1],
-      z*v[0] - x * v[2],
-      x*v[1] - y * v[0],
-    ]
-  }
 
   function getTextures(mainTileProps){
     return ([s,t], next)=>{
@@ -145,7 +151,6 @@ export function create(input, callback){
         }
         console.log('one more file', filename);
         filesOpened[filename] = floatArray(content)
-        //filesOpened[filename].state = 'readed';
         next(null);
       })
 
@@ -162,12 +167,6 @@ export function create(input, callback){
     let normal = stToNormal(coords.s, coords.t, coords.face);
 
     let height = getHeightAt(getTileProps(coords, lod));
-    if(coords.face != face){
-      if(height != coords.face){
-        console.log('AHAHAHA---->', face, coords.face, )
-      }
-    }
-
     return {normal, height, i, j}
   }
 
@@ -192,13 +191,7 @@ export function create(input, callback){
     let I = Math.floor(tileProps.inTileT * TextureSize)
     let J = Math.floor(tileProps.inTileS * TextureSize);
     let ix = J*TextureSize + I;
-    // console.log('-----------------', J,I,  buffer[ix]);
     let hv = buffer[ix];
-    if(tileProps.face != hv){
-      console.log("wrong!",  tileProps, hv);
-    }
-
-
     return   hv
   }
 }
@@ -208,3 +201,19 @@ function floatArray(buf){
   return new Float32Array(buf.buffer);
 }
 
+function normalize(v){
+  let l = Math.hypot(...v);
+  return [v[0]/l, v[1]/l, v[2]/l];
+}
+
+function dot(v, u){
+  return v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
+}
+
+function cross([x,y,z], v){
+  return [
+    y*v[2] - z * v[1],
+    z*v[0] - x * v[2],
+    x*v[1] - y * v[0],
+  ]
+}

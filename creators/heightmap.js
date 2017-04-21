@@ -23,11 +23,12 @@ function createZeroLod(input, callback){
   let {radius} = planet;
   let surfaceArea = 4.0 * Math.PI * Math.pow(radius, 2);
   let division = Math.pow(2, lod);
-  let T = Math.floor(tile / division);
-  let S = tile % division;
+  //let T = Math.floor(tile / division);
+  //let S = tile % division;
 
-  let s = S / division;
-  let t = T / division;
+  //let s = S / division;
+  //let t = T / division;
+  let thisTileProps = calculateTileProperties(face, lod, tile);
 
   let generator = new ClassicalNoise(planet.table);
   let ab = new Float32Array(TextureSize * TextureSize);
@@ -42,7 +43,7 @@ function createZeroLod(input, callback){
     for(let j =0; j < TextureSize; ++j){
       let ts = i / TextureSize / division;
       let tt = j / TextureSize / division;
-      let normal = stToNormal(s+ts, t+tt, face)
+      let normal = stToNormal(thisTileProps.s+ts, thisTileProps.t+tt, face)
       let [x,y,z] = normal;
       let normalLength = Math.sqrt(x*x + y*y + z*z);
       let heightValue = 0;
@@ -58,9 +59,17 @@ function createZeroLod(input, callback){
       }
 
       _avgNoise.push(Date.now() - _noiseStart);
+
       //**************
       heightValue = face;
       /////////////////
+      //
+      if(j  == 128){
+        heightValue = (face -1)%6
+      }
+      if(i  == 128){
+        heightValue = (face + 1)%6
+      }
 
       let ix = (j*TextureSize + i); 
       ab[ix] = heightValue;
@@ -81,16 +90,21 @@ export function create(input, callback){
   if(lod == 0) return createZeroLod(input, callback);
   console.log('==create heightMap' ,`lod:${lod}, face:${face}, tile:${tile}`);
 
+
   let prevLod = lod - 1;
+
+  let thisTileProps = calculateTileProperties(face, lod, tile);
+
+
   let division = Math.pow(2, lod);
   let prevDivision = Math.pow(2, lod-1);
-  let T = Math.floor(tile / division);
-  let S = tile % division;
-  let s = S / division;
-  let t = T / division;
-  console.log('lod', lod, prevLod, T, S, tile);
-  S = s * prevDivision;
-  T = t * prevDivision;
+  //let T = Math.floor(tile / division);
+  //let S = tile % division;
+  //let s = S / division;
+  //let t = T / division;
+  //console.log('lod', lod, prevLod, T, S, tile);
+  let S = thisTileProps.s * prevDivision;
+  let T = thisTileProps.t * prevDivision;
   let tileS = S - Math.floor(S);
   let tileT = T - Math.floor(T);
   let tileNum = Math.floor(T) * prevDivision + Math.floor(S);
@@ -130,18 +144,16 @@ function createTileUppersLods(input, prevTile, callback){
     let {planet, params} = input;
     let {lod, face, tile} = params;
     let prevousTile = new Float32Array(prevousTileBuffer.buffer);
-    //if(lod == 2) {
-      //console.log("skip 2");
-      //return callback(null);
-    //}
     console.log('create' ,`lod:${lod}, face:${face}, tile:${tile}`);
-    let division = Math.pow(2, lod);
-    let S = Math.floor(tile / division);
-    let T = tile % division;
+    //let division = Math.pow(2, lod);
+
+    //let S = Math.floor(tile / division);
+    //let T = tile % division;
 
 
-    let s = S / division; // this texture start
-    let t = T / division; 
+    //let s = S / division; // this texture start
+    //let t = T / division; 
+    let thisTileProp = calculateTileProperties(face, lod, tile);
     console.log('create' ,`T:${T}, S:${S}, t:${t}, s:${s}`);
 
 
@@ -156,14 +168,14 @@ function createTileUppersLods(input, prevTile, callback){
       for(let j =0; j < TextureSize; ++j){
         let ts = i / TextureSize / division;
         let tt = j / TextureSize / division;
-        let normal = stToNormal(s+ts, t+tt, face)
+        let normal = stToNormal(thisTileProp.s+ts, thisTileProp.t+tt, face)
         let [x,y,z] = normal;
         let normalLength = Math.sqrt(x*x + y*y + z*z);
         let heightValue = 0;
 
         // calculate prev texture coords;
-        let I = Math.floor((t+tt-prevTile.t) * prevTile.division * TextureSize);
-        let J = Math.floor((s+ts-prevTile.s) * prevTile.division * TextureSize);
+        let I = Math.floor((thisTileProp.t+tt-prevTile.t) * prevTile.division * TextureSize);
+        let J = Math.floor((thisTileProp.s+ts-prevTile.s) * prevTile.division * TextureSize);
         let prevIx = (J * TextureSize + I ); // *4;
 
         for(let cc = SampleFrom; cc < SampleTo; ++cc){
@@ -174,15 +186,9 @@ function createTileUppersLods(input, prevTile, callback){
           heightValue += noiseLevel;
         }
         
-        let ix = (j*TextureSize + i); // * 4;
-        // console.log(heightValue/prevousTile[prevIx]);
+        let ix = (j*TextureSize + i); 
 
-        ab[ix] = heightValue; //+addColor[0];
-        //ab[ix] = prevousTile[prevIx] + heightValue; //+addColor[0];
-        //ab[ix] = prevousTile[prevIx]+addColor[0];
-        //ab[ix+1] = prevousTile[prevIx+1]+addColor[1];
-        //ab[ix+2] = prevousTile[prevIx+2]+addColor[2];
-        //ab[ix+3] = 255;
+        ab[ix] = heightValue; 
       }
     }
 
