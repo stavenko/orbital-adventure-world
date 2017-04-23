@@ -5,7 +5,7 @@ import config from '../config.json';
 import {ClassicalNoise} from '../PerlinNoise.js'; 
 import {getTextureFilename} from '../utils.js';
 import {writeFileInDir} from '../fsUtils.js';
-import {stToNormal} from './lookup.js';
+import {stToNormal, calculateTileProperties} from './lookup.js';
 import * as zipper from './zipper';
 
 let TextureSize = 512;
@@ -41,8 +41,8 @@ function createZeroLod(input, callback){
   let SampleTo = SampleFrom + SAMPLES;
   for(let i =0; i < TextureSize; ++i){
     for(let j =0; j < TextureSize; ++j){
-      let ts = i / TextureSize / division;
-      let tt = j / TextureSize / division;
+      let tt = i / TextureSize / division;
+      let ts = j / TextureSize / division;
       let normal = stToNormal(thisTileProps.s+ts, thisTileProps.t+tt, face)
       let [x,y,z] = normal;
       let normalLength = Math.sqrt(x*x + y*y + z*z);
@@ -61,15 +61,15 @@ function createZeroLod(input, callback){
       _avgNoise.push(Date.now() - _noiseStart);
 
       //**************
-      heightValue = face;
+      // heightValue = face;
       /////////////////
       //
-      if(j  == 128){
-        heightValue = (face -1)%6
-      }
-      if(i  == 128){
-        heightValue = (face + 1)%6
-      }
+      // if(j  == 128){
+        //heightValue = (face -1)%6
+      //}
+      //if(i  == 128){
+        //heightValue = (face + 1)%6
+      //}
 
       let ix = (j*TextureSize + i); 
       ab[ix] = heightValue;

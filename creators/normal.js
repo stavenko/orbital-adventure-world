@@ -24,11 +24,11 @@ export function create(input, callback){
 
   let division = Math.pow(2, lod);
   let size = 1.0 / division;
-  let T = Math.floor(tile / division);
-  let S = tile % division;
+  // let T = Math.floor(tile / division);
+  // let S = tile % division;
 
-  let s = S / division;
-  let t = T / division;
+  // let s = S / division;
+  // let t = T / division;
 
   let filesOpened = {};
   let queryQueue = {};
@@ -65,10 +65,10 @@ export function create(input, callback){
         let HHH = [];
         for(let d =0; d< vs.length; ++d){
           let [di, dj] = vs[d];
-          let {normal, height} = lookupAt(di, dj, thisTileProps);
+          let {normal, height} = lookupAt(di, dj, thisTileProps, d);
           normal = normalize(normal);
-          height += 1;
-          let hgt = [normal[0] * height, normal[1] *height, normal[2] *height];
+          let mheight = height + 10;
+          let hgt = [normal[0] * mheight, normal[1] *mheight, normal[2] *mheight];
           heights.push(hgt);
           HHH.push(height);
         }
@@ -86,23 +86,39 @@ export function create(input, callback){
 
         let H = HHH[4];
         let pnormal = normalize(cross(normalize(v1), normalize(v2)));
+        // pnormal = normalize(normalize(heights[4]));
         let direction = dot(pnormal, heights[4]);
 
         if(direction < 0){
-          pnormal = [pnormal[0] * -1, pnormal[1]*-1, pnormal[2]*-1];
+          // pnormal = [pnormal[0] * -1, pnormal[1]*-1, pnormal[2]*-1];
         }
         
-        // pnormal = normalize(heights[4])
+        //pnormal = normalize(heights[4])
         let ix = 3*(j * TextureSize + i);
-        if(i == 0) H = HHH[0];
-        if(i == 511) H = HHH[1];
-        if(j == 0) H = HHH[2];
-        if(j == 511) H = HHH[3];
-        let color = COLORS[Math.floor((H + 6)%6)];
+        //if(i == 0) H = HHH[0];
+        //if(i == 511) H = HHH[1];
+        //if(j == 0) H = HHH[2];
+        //if(j == 511) H = HHH[3];
+        let color = COLORS[thisTileProps.face];
+        //let colorBYHM = COLORS[H];
         if(!color) console.log(H);
 
+        //let m = 50, M = 512-50;
+        //let l = 100, L = 512-100;
+
+        pnormal = ntc(pnormal);
+        //if(i > m && i < M && j >m && j <M){
+          //pnormal = color;
+        //}
+        //if(i > l && i < L && j >l && j <L){
+            //pnormal = [
+              //(j-l)/TextureSize * 255,
+              //(i-l)/TextureSize * 255,
+              //0]
+        //}
+
         if(false){
-          if(true){
+          if(false){
             normalMap[ix]   = Math.floor(255 *(H +1.0) / 2) ;
             normalMap[ix+1] = Math.floor(255 *(H +1.0) / 2) ;
             normalMap[ix+2] = Math.floor(255 *(H +1.0) / 2) ;
@@ -112,9 +128,9 @@ export function create(input, callback){
             normalMap[ix+2] = Math.floor(255 *(pnormal[2] +1.0) / 2) ;
           }
         }else{
-          normalMap[ix]   = color[0];
-          normalMap[ix+1] = color[1];
-          normalMap[ix+2] = color[2];
+          normalMap[ix]   = pnormal[0];
+          normalMap[ix+1] = pnormal[1];
+          normalMap[ix+2] = pnormal[2];
         }
       }
     }
@@ -130,6 +146,9 @@ export function create(input, callback){
   })
 
 
+  function ntc([x,y,z]){
+    return [(x+1)/2*255, (y+1)/2*255, (z+1)/2*255];
+  }
   function getTextures(mainTileProps){
     return ([s,t], next)=>{
       let coords = transformToCorrectFace(s,t, mainTileProps.face);
@@ -158,7 +177,7 @@ export function create(input, callback){
   }
 
 
-  function lookupAt(i, j, tileProps){
+  function lookupAt(i, j, tileProps, d){
     let tt = i / TextureSize / division;
     let ts = j / TextureSize / division;
     let {t,s,face} = tileProps;
