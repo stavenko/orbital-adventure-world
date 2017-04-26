@@ -1,13 +1,23 @@
+import async from 'async';
 import child_process from 'child_process';
 import {ClassicalNoise} from './PerlinNoise.js';
 import {generateSystemId} from './utils.js';
+import isEqual from 'lodash/isEqual'
+
+import * as HM from './creators/heightmap.js';
+import * as NM from './creators/normal.js';
+
+const CREATORS = {
+  'normal': NM,
+  'height': HM
+}
 
 const TextureSize = 2048
 
 const childProcess = child_process.fork('./worker.js');
-const callbackMap = {}
 const processState = {};
 const processQueue = [];
+const runningTasks = {};
 let busy = false;
 
 
@@ -16,11 +26,19 @@ childProcess.on('message', function(event){
   if(event.type == 'completed'){
     busy = false;
     processState[event.uuid] = 'completed';
+    delete runningTasks[event.uuid];
+    tryPutNextTask();
+  }
+  if(event.type == 'postpone'){
+    let tasklist = event.tasklist;
+    processState[event.uuid] = 'queued'
+    processQueue.push(...tasklist);
+    busy = false;
     tryPutNextTask();
   }
 });
 
-export function getProcessStates(processes){
+export function getProcessStates(processes) {
   let result = {}
   for(let i =0 ;i <processes.length; ++i){
     let pr = processes[i];
@@ -34,22 +52,74 @@ export function getProcessStates(processes){
   return result;
 }
 
-export function generateTexture(planet, params, callback){
+export function generateTexture(planetJSON, params, callback){
   let uuid = generateSystemId();
-  callbackMap[uuid] = callback;
   processState[uuid] = 'queued';
-  planet = JSON.parse(planet);
-  processQueue.push({planet, params, uuid});
-  tryPutNextTask();
-  callback(null, uuid);
+  let planet = JSON.parse(planetJSON);
+  console.log(`generate query: ${params.textureType}, ${params.lod}, ${params.face}, ${params.tile} for planet:${planet.uuid}`);
+  let creator = CREATORS[params.textureType]
+
+  let requirements = creator.getRequirements(params);
+  
+  if(requirements.length  !== 0){
+    console.log(`-----requirements for lod:${params.lod}, face:${params.face}, tile:${params.tile}------`);
+    console.log(requirements.map(req=>`lod:${req.lod}, face:${req.face}, tile:${req.tile}`).join('\n'));
+    console.log('------------------------------------------------------------------------------------');
+    async.map(requirements, checkAndLaunchReq, (err, result)=>{
+      if(err) throw err;
+      console.log("go! ------------------>");
+      launch(params, callback);
+    });
+  }else{ 
+    return launch(params, callback);
+  }
+
+
+  function checkAndLaunchReq(reqParams, next){
+    creator.isExists(planet, reqParams, isExists=>{
+      if(isExists) return next(null, "texture exists");
+      generateTexture(planetJSON, reqParams, (err, uuid)=>{
+        if(!err) next(null);
+      })
+    })
+  }
+
+  function launch(params, cb){
+    let existUUID = alreadyInQueueOrRunning(planet, params)
+    if(existUUID) {
+      console.log("task already exists");
+      return cb(null, existUUID);
+    }
+    console.log(`enqeued task: ${params.textureType}, lod:${params.lod}, face:${params.face}, tile:${params.tile} for planet:${planet.uuid}`);
+    processQueue.push({planet, params, uuid});
+    tryPutNextTask();
+    cb(null, uuid);
+  }
+
+  function alreadyInQueueOrRunning(pl, pr){
+    let ix = processQueue.findIndex(finder);
+    // let isQueued = ix !== -1;
+    if(ix !== -1) return processQueue[ix].uuid;
+    let task = Object.values(runningTasks).find(finder);
+    if(task) return task.uuid;
+
+
+    function finder({planet, params}){
+      let paramsEq = ['lod', 'face', 'tile', 'textureType'].map(k=>params[k] == pr[k]).reduce((a,b)=>a&&b, true);
+      return planet.uuid === pl.uuid && paramsEq
+    }
+  }
+
 }
 
 function tryPutNextTask(){
   if(busy || processQueue.length == 0) return;
+  console.log("tasks left ", processQueue.length);
 
   let obj = processQueue.shift();
   busy = true;
   processState[obj.uuid] = 'running'
+  runningTasks[obj.uuid] = obj;
   childProcess.send(obj);
 }
 

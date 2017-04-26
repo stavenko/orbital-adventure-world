@@ -14,6 +14,14 @@ function reducer(x){
   return 1/Math.pow(2,x);
 }
 
+function testHeightValue(i,j, face){
+  let div = Math.floor(TextureSize / (face+1));
+  let remainder = i % div;
+  let value = 1-Math.abs((remainder / div)*2-1);
+  if(i > div) return 0.0;
+  return value;
+}
+
 const SAMPLES = 8;
 
 function createZeroLod(input, callback){
@@ -23,11 +31,6 @@ function createZeroLod(input, callback){
   let {radius} = planet;
   let surfaceArea = 4.0 * Math.PI * Math.pow(radius, 2);
   let division = Math.pow(2, lod);
-  //let T = Math.floor(tile / division);
-  //let S = tile % division;
-
-  //let s = S / division;
-  //let t = T / division;
   let thisTileProps = calculateTileProperties(face, lod, tile);
 
   let generator = new ClassicalNoise(planet.table);
@@ -60,6 +63,9 @@ function createZeroLod(input, callback){
 
       _avgNoise.push(Date.now() - _noiseStart);
 
+      //***********
+      // heightValue = testHeightValue(i,j, face);
+
       //**************
       // heightValue = face;
       /////////////////
@@ -75,20 +81,35 @@ function createZeroLod(input, callback){
       ab[ix] = heightValue;
     }
   }
-  let l = _avgNoise.length;
-  let n = _avgNoise.reduce((a,b)=>a+b);
-  console.log('avg noise calc', n/l);
-  console.log("array time", Date.now() - _arrayStart);
   let buffer = Buffer.from(ab.buffer);
-  console.log("buffer size", buffer.length);
   let filePath = getTextureFilename({planetUUID:planet.uuid, textureType:'height', lod, tile, face});
   zipper.deflateTo(filePath, buffer, callback);
 }
 
+export function isExists(forPlanet, params, callback){
+  let filename = getTextureFilename({
+    planetUUID: forPlanet.uuid,
+    textureType: 'height',
+    lod: params.lod, 
+    tile: params.tile, 
+    face: params.face
+  });
+  fs.access(filename, err=>{
+    if(!err) return callback(true);
+    callback(false);
+  })
+}
+
+export function getRequirements(){
+  return [];
+}
+
 export function create(input, callback){
   let {lod, face, tile} = input.params;
+
+
   if(lod == 0) return createZeroLod(input, callback);
-  console.log('==create heightMap' ,`lod:${lod}, face:${face}, tile:${tile}`);
+
 
 
   let prevLod = lod - 1;
@@ -98,11 +119,6 @@ export function create(input, callback){
 
   let division = Math.pow(2, lod);
   let prevDivision = Math.pow(2, lod-1);
-  //let T = Math.floor(tile / division);
-  //let S = tile % division;
-  //let s = S / division;
-  //let t = T / division;
-  //console.log('lod', lod, prevLod, T, S, tile);
   let S = thisTileProps.s * prevDivision;
   let T = thisTileProps.t * prevDivision;
   let tileS = S - Math.floor(S);
@@ -122,15 +138,6 @@ export function create(input, callback){
 
   tup(new Buffer(TextureSize*TextureSize*4));
 
-  //zipper.inflateFrom(filePath, createTileUppersLods(input,{
-    //tile: tileNum,
-    //s:Math.floor(S) / prevDivision,
-    //t:Math.floor(T) / prevDivision,
-    //tileSize: 1/prevDivision,
-    //division: prevDivision,
-  //}, callback))
-
-
 }
 
 const EPSILON = 1e-6;
@@ -144,30 +151,21 @@ function createTileUppersLods(input, prevTile, callback){
     let {planet, params} = input;
     let {lod, face, tile} = params;
     let prevousTile = new Float32Array(prevousTileBuffer.buffer);
-    console.log('create' ,`lod:${lod}, face:${face}, tile:${tile}`);
-    //let division = Math.pow(2, lod);
+    let division = Math.pow(2, lod);
 
-    //let S = Math.floor(tile / division);
-    //let T = tile % division;
-
-
-    //let s = S / division; // this texture start
-    //let t = T / division; 
     let thisTileProp = calculateTileProperties(face, lod, tile);
-    console.log('create' ,`T:${T}, S:${S}, t:${t}, s:${s}`);
-
 
     let generator = new ClassicalNoise(planet.table);
     let ab = new Float32Array(TextureSize*TextureSize);
 
     let addColor = [0,0,0,0]
-    let SampleFrom = 0;//  lod * SAMPLES;
-    let SampleTo = SAMPLES+lod; //SampleFrom + SAMPLES;
+    let SampleFrom = 0;
+    let SampleTo = SAMPLES+lod; 
 
     for(let i =0; i < TextureSize; ++i){
       for(let j =0; j < TextureSize; ++j){
-        let ts = i / TextureSize / division;
-        let tt = j / TextureSize / division;
+        let ts = j / TextureSize / division;
+        let tt = i / TextureSize / division;
         let normal = stToNormal(thisTileProp.s+ts, thisTileProp.t+tt, face)
         let [x,y,z] = normal;
         let normalLength = Math.sqrt(x*x + y*y + z*z);
@@ -197,7 +195,6 @@ function createTileUppersLods(input, prevTile, callback){
     let buffer = Buffer.from(ab.buffer);
 
     zipper.deflateTo(filePath, buffer, (...args)=>{
-      console.log("done");
       callback(...args)
     });
   }

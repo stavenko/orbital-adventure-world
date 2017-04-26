@@ -50,6 +50,7 @@ function transformNegZ(s,t, face){
 }
 
 export function transformToCorrectFace(t, s, face){
+  throw "NOOOO";
   if(face == 2){
     return transformPosX(s,t,face)
   }
@@ -71,7 +72,66 @@ export function transformToCorrectFace(t, s, face){
 }
 
 
+export function tileST2Normal(s,t,tileProps){
+  
+
+}
+
+export function normal2FaceST(normal, lod){
+  let coords = normalToST(normal);
+  return getTileProps(coords);
+
+}
+
+export function normalToST(normal){
+  let face = faceFromNormal(normal);
+  let [s,t] = stFromNormal(normal, face).map(i=>0.5*(i+1));
+  return {s,t,face};
+
+}
+
+function stFromNormal(n, f){
+  let abs = Math.abs;
+  if(f == 2) return [-n[2]/ abs(n[0]), -n[1]/abs(n[0])]; // +x
+  if(f == 0) return [n[2]/ abs(n[0]),  -n[1]/abs(n[0])]; 
+
+  if(f == 4) return [n[0]/ abs(n[2]),  -n[1]/abs(n[2])]; // +z
+  if(f == 5) return [-n[0]/ abs(n[2]), -n[1]/abs(n[2])]; 
+
+  if(f == 3) return [n[0]/ abs(n[1]),   n[2]/abs(n[1])]; // +y
+  if(f == 1) return [n[0]/ abs(n[1]),  -n[2]/abs(n[1])]; 
+  throw "undefined face " + f;
+}
+
+function faceFromNormal(n){
+  let ax = Math.abs(n[0]);
+  let ay = Math.abs(n[1]);
+  let az = Math.abs(n[2]);
+
+  if(ay >= ax && ay >= az){
+    if(n[1] > 0.0) return 3;
+    else return 1;
+  } 
+
+  if(ax >= ay && ax >= az){
+    if(n[0] > 0.0) return 2;
+    else return 0;
+  }
+
+  if(az >= ay && az >= ax){
+    if(n[2] > 0.0) return 4;
+    else return 5;
+  }
+  throw `incorrect data normal: ${n[0]}, ${n[1]}, ${n[2]}`; 
+}
+
+
 export function stToNormal(s,t, face){
+  //if(s == 0) s+=1e-6;
+  //if(t == 0) t+=1e-6;
+  //if(s == 1) s-=1e-6;
+  //if(t == 1) t-=1e-6;
+
   let ss = s * 2 - 1;
   let tt = t * 2 - 1;
 
