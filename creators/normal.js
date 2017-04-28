@@ -1,5 +1,8 @@
 import async from 'async';
-import {getTileProps, calculateTileProperties, normalToST, transformToCorrectFace, stToNormal } from './lookup.js'
+import {getTileProps, 
+  calculateTileProperties, 
+  normalToST, transformToCorrectFace, 
+  stToNormal } from './lookup.js';
 import {generateSystemId, getTextureFilename} from '../utils.js';
 import {inflateFromIfExists} from './zipper.js';
 import * as zipper from './zipper';
@@ -41,6 +44,7 @@ function getTileShifts(params){
 
     [thisTileProps.s+size+dv, thisTileProps.t+size+dv],
     [thisTileProps.s+size+dv, thisTileProps.t],
+    [thisTileProps.s+size, thisTileProps.t+dv],
     [thisTileProps.s+size+dv, thisTileProps.t-dv],
 
   ]
@@ -66,14 +70,37 @@ export function isExists(forPlanet, params, callback){
 }
 
 export function getRequirements(params){
-  return getTileShifts(params).map(([s,t])=>{
-    let normal = stToNormal(s,t,params.face); 
-    let coords = normalToST(normal);
-    let {lod} = params;
-    let nTile = getTileProps(coords, lod);
+  let {lod, face, tile} = params;
+  let thisTileProps = calculateTileProperties(face, lod, tile);
 
-    return {face: nTile.face, tile: nTile.tile, lod, textureType:'height'};
-  })
+  let tiles = [];
+  let indexesI = [0,1,2,3, 512-3,512-2,512-1];
+  let indexesJ = [0,1,2,3, 512-3,512-2,512-1];
+  let L = indexesI.length;
+  for(let ii = 0; ii <L; ++ii){
+    for(let jj = 0; jj <L; ++jj){
+      let i = indexesI[ii];
+      let j = indexesJ[jj];
+      let vs = [
+        [i-1, j],
+        [i+1, j],
+        [i, j-1],
+        [i, j+1]
+      ]
+      for(let d =0; d< vs.length; ++d){
+        let [di, dj] = vs[d];
+        let normal = getLookupNormal(di, dj, thisTileProps); 
+        let coords = normalToST(normal);
+        let tp = getTileProps(coords, thisTileProps.lod);
+        let ix = tiles.findIndex(({face, tile})=> {
+          return face == tp.face && tile == tp.tile 
+        });
+        if(ix === -1) tiles.push({...tp, textureType:'height'});
+      }
+    }
+
+  }
+  return tiles;
 }
 
 export function create(input, callback){
@@ -82,7 +109,7 @@ export function create(input, callback){
 
   let thisTileProps = calculateTileProperties(face, lod, tile);
   let normalMap = new Buffer(TextureSize * TextureSize * 3);
-  async.map(getTileShifts(params), getTextures(thisTileProps), (err, results)=>{
+  async.map(getRequirements(params), getTextures(thisTileProps), (err, results)=>{
     if(err) throw err;
 
     console.log('create normalmap' ,`lod:${lod}, face:${face}, tile:${tile}`);
@@ -168,22 +195,14 @@ export function create(input, callback){
     return [(x+1)/2*255, (y+1)/2*255, (z+1)/2*255];
   }
   function getTextures(mainTileProps){
-    return ([s,t], next)=>{
-      //------------------------------------------
-      let normal = stToNormal(s,t, mainTileProps.face); 
-      let coords = normalToST(normal);
+    return ({face, tile, textureType}, next)=>{
       let {lod} = mainTileProps;
-      let nTile = getTileProps(coords, lod);
-      let fromFace = `|| face:${mainTileProps.face}, c.s=${coords.s}, c.t=${coords.t}`
-      let normal__ = `N:[${normal[0]},${normal[1]},${normal[2]}]`;
-      console.log(`openFile: lod ${lod}, face:${nTile.face}, tile:${nTile.tile}: ${fromFace}: ${normal__}`);
-
       let filename = getTextureFilename({
         planetUUID: planet.uuid,
         textureType: 'height',
         lod: mainTileProps.lod, 
-        tile: nTile.tile, 
-        face: nTile.face
+        tile: tile, 
+        face: face
       });
 
       inflateFromIfExists(filename, (err, content)=>{
@@ -194,17 +213,13 @@ export function create(input, callback){
     }
   }
 
-  function lookupAt(i, j, tileProps, d){
-    let division = Math.pow(2, tileProps.lod);
-    let tt = i / TextureSize / division;
-    let ts = j / TextureSize / division;
-    let {t,s,face} = tileProps;
 
-    let normal = stToNormal(ts+s, tt+t, face);
+  function lookupAt(i, j, tileProps, d){
+
+    let normal = getLookupNormal(i, j, tileProps);
     let coords = normalToST(normal);
     let newTileProps = getTileProps(coords, tileProps.lod)
-
-    let height = getHeightAt(newTileProps, {...tileProps, coords, normal,ts, tt, i,j});
+    let height = getHeightAt(newTileProps);
     return {normal, height, i, j}
   }
 
@@ -245,6 +260,15 @@ export function create(input, callback){
       console.log(tileProps, I, J);
     }
   }
+}
+
+function getLookupNormal(i, j, tileProps){
+  let division = Math.pow(2, tileProps.lod);
+  let tt = i / TextureSize / division;
+  let ts = j / TextureSize / division;
+  let {t,s,face} = tileProps;
+  let normal = stToNormal(ts+s, tt+t, face);
+  return normal
 }
 
 function floatArray(buf){

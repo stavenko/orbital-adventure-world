@@ -118,19 +118,17 @@ function faceFromNormal(n){
     else return 0;
   }
 
+
   if(az >= ay && az >= ax){
     if(n[2] > 0.0) return 4;
     else return 5;
   }
+
   throw `incorrect data normal: ${n[0]}, ${n[1]}, ${n[2]}`; 
 }
 
 
 export function stToNormal(s,t, face){
-  //if(s == 0) s+=1e-6;
-  //if(t == 0) t+=1e-6;
-  //if(s == 1) s-=1e-6;
-  //if(t == 1) t-=1e-6;
 
   let ss = s * 2 - 1;
   let tt = t * 2 - 1;
