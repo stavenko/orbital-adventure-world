@@ -116,17 +116,16 @@ export function create(input, callback){
     let __t = Date.now();
     for(let i = 0; i < TextureSize; ++i){
       for(let j = 0; j < TextureSize; ++j){
-        let vs = [[i-1, j],
-         [i+1, j],
-          
-
-         [i, j-1],
-         [i, j+1],
-         [i, j]
+        let vs = [
+          [i-1, j],
+          [i+1, j],
+          [i, j-1],
+          [i, j+1],
+          [i, j]
         ];
 
         let heights = [];
-        let HHH = [];
+        // let HHH = [];
         for(let d =0; d< vs.length; ++d){
           let [di, dj] = vs[d];
           let {normal, height} = lookupAt(di, dj, thisTileProps, d);
@@ -134,7 +133,6 @@ export function create(input, callback){
           let mheight = height + 10;
           let hgt = [normal[0] * mheight, normal[1] *mheight, normal[2] *mheight];
           heights.push(hgt);
-          HHH.push(height);
         }
         let v1 = [
           heights[0][0] - heights[1][0],
@@ -146,38 +144,23 @@ export function create(input, callback){
           heights[2][1] - heights[3][1],
           heights[2][2] - heights[3][2]];
 
-        let H = HHH[4];
-        let pnormal = normalize(cross(normalize(v1), normalize(v2)));
+        let pnormal = normalize(cross((v1), (v2)));
         let direction = dot(pnormal, heights[4]);
 
         if(direction < 0){
-           pnormal = [pnormal[0] * -1, pnormal[1]*-1, pnormal[2]*-1];
+          pnormal = [pnormal[0] * -1, pnormal[1]*-1, pnormal[2]*-1];
         }
         
         let ix = 3*(j * TextureSize + i);
-        let color = COLORS[thisTileProps.face];
-        if(!color) console.log(H);
-
 
         pnormal = ntc(pnormal);
 
-        if(false){
-          if(false){
-            normalMap[ix]   = Math.floor(255 *(H +1.0) / 2) ;
-            normalMap[ix+1] = Math.floor(255 *(H +1.0) / 2) ;
-            normalMap[ix+2] = Math.floor(255 *(H +1.0) / 2) ;
-          }else{
-            normalMap[ix]   = Math.floor(255 *(pnormal[0] +1.0) / 2) ;
-            normalMap[ix+1] = Math.floor(255 *(pnormal[1] +1.0) / 2) ;
-            normalMap[ix+2] = Math.floor(255 *(pnormal[2] +1.0) / 2) ;
-          }
-        }else{
-          normalMap[ix]   = pnormal[0];
-          normalMap[ix+1] = pnormal[1];
-          normalMap[ix+2] = pnormal[2];
-        }
+        normalMap[ix]   = pnormal[0];
+        normalMap[ix+1] = pnormal[1];
+        normalMap[ix+2] = pnormal[2];
       }
     }
+    console.log('time spent', Date.now() - __t);
     let filePath = getTextureFilename({
       planetUUID: planet.uuid,
       textureType: 'normal',
@@ -284,7 +267,11 @@ function dot(v, u){
   return v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
 }
 
-function cross([x,y,z], v){
+function cross(u, v){
+  let x = u[0],
+      y = u[1],
+      z = u[2];
+
   return [
     y*v[2] - z * v[1],
     z*v[0] - x * v[2],

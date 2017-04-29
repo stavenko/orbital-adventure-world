@@ -98,9 +98,10 @@ export function generateTexture(planetJSON, params, callback){
 
   function alreadyInQueueOrRunning(pl, pr){
     let ix = processQueue.findIndex(finder);
-    // let isQueued = ix !== -1;
     if(ix !== -1) return processQueue[ix].uuid;
-    let task = Object.values(runningTasks).find(finder);
+    let currentTasks = []
+    for(let k in runningTasks) currentTasks.push(runningTasks[k]);
+    let task = currentTasks.find(finder);
     if(task) return task.uuid;
 
 
