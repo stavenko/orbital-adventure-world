@@ -15,3 +15,10 @@ export function generateSystemId(){
   });
 }
 
+export function getAtmosphereTextureFileName({planetUUID, resolution, textureType, resMu, resR, resMus, resNu}){
+
+  if(!resolution)
+    resolution = [resR, resMu, resMus, resNu].join('x'); 
+
+  return path.join(filesDir, 'planets',planetUUID, 'textures/atmosphere',  resolution, `${textureType}.raw`); }
+

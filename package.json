@@ -29,6 +29,7 @@
     "babel-preset-stage-0": "^6.24.1",
     "body-parser": "^1.17.1",
     "express": "^4.15.2",
+    "fmath": "^1.0.1",
     "jpeg-js": "^0.2.0",
     "json-loader": "^0.5.4",
     "lodash": "^4.17.4",

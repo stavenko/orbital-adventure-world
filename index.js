@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
 import bodyParser from 'body-parser';
-import {getTextureFilename} from './utils.js';
+import {getAtmosphereTextureFileName, getTextureFilename} from './utils.js';
 import * as WorldManager from './WorldManager.js';
 import * as TextureGenerator from './TextureCreator.js';
 
@@ -59,6 +59,15 @@ app.post('/generate-texture/',(req,res)=>{
 
 app.get('/texture/:planetUUID/:textureType/:lod/:face/:tile.raw',(req, res)=>{
   let file = getTextureFilename(req.params);
+  fs.access(file, err=>{
+    if(err) return res.status(404).send('not found');
+    res.sendFile(file);
+  })
+});
+
+app.get('/texture/:planetUUID/atmosphere/:resolution/:textureType.raw',(req, res)=>{
+  let file = getAtmosphereTextureFileName(req.params);
+  console.log("WTF", file);
   fs.access(file, err=>{
     if(err) return res.status(404).send('not found');
     res.sendFile(file);

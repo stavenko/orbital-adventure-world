@@ -6,10 +6,18 @@ import isEqual from 'lodash/isEqual'
 
 import * as HM from './creators/heightmap.js';
 import * as NM from './creators/normal.js';
+import * as AA from './creators/atmosphere.js';
 
 const CREATORS = {
   'normal': NM,
-  'height': HM
+  'height': HM,
+  'irradianceTexture':AA,
+  'inscatterTexture':AA,
+  'deltaSRTexture':AA,
+  'deltaSMTexture':AA,
+  'deltaJTexture':AA,
+  'deltaETexture':AA,
+  'transmittanceTexture':AA
 }
 
 const TextureSize = 2048
@@ -56,18 +64,17 @@ export function generateTexture(planetJSON, params, callback){
   let uuid = generateSystemId();
   processState[uuid] = 'queued';
   let planet = JSON.parse(planetJSON);
-  console.log(`generate query: ${params.textureType}, ${params.lod}, ${params.face}, ${params.tile} for planet:${planet.uuid}`);
+  //console.log(`generate query: ${params.textureType}, ${params.lod}, ${params.face}, ${params.tile} for planet:${planet.uuid}`);
+  //console.log()
   let creator = CREATORS[params.textureType]
-
   let requirements = creator.getRequirements(params);
-  
   if(requirements.length  !== 0){
-    console.log(`-----requirements for lod:${params.lod}, face:${params.face}, tile:${params.tile}------`);
-    console.log(requirements.map(req=>`lod:${req.lod}, face:${req.face}, tile:${req.tile}`).join('\n'));
-    console.log('------------------------------------------------------------------------------------');
+    //console.log(`-----requirements for lod:${params.lod}, face:${params.face}, tile:${params.tile}------`);
+    //console.log(requirements.map(req=>`lod:${req.lod}, face:${req.face}, tile:${req.tile}`).join('\n'));
+    //console.log('------------------------------------------------------------------------------------');
     async.map(requirements, checkAndLaunchReq, (err, result)=>{
       if(err) throw err;
-      console.log("go! ------------------>");
+      //console.log("go! ------------------>");
       launch(params, callback);
     });
   }else{ 
@@ -99,14 +106,28 @@ export function generateTexture(planetJSON, params, callback){
   function alreadyInQueueOrRunning(pl, pr){
     let ix = processQueue.findIndex(finder);
     if(ix !== -1) return processQueue[ix].uuid;
-    let currentTasks = []
+    let currentTasks = [];
     for(let k in runningTasks) currentTasks.push(runningTasks[k]);
     let task = currentTasks.find(finder);
     if(task) return task.uuid;
 
-
     function finder({planet, params}){
-      let paramsEq = ['lod', 'face', 'tile', 'textureType'].map(k=>params[k] == pr[k]).reduce((a,b)=>a&&b, true);
+      let paramsList = []
+      switch(params.textureType){
+        case 'irradianceTexture':
+        case 'inscatterTexture':
+        case 'deltaSRTexture':
+        case 'deltaSMTexture':
+        case 'deltaJTexture':
+        case 'deltaETexture':
+        case 'transmittanceTexture':
+          paramsList = ['textureType', 'resMu', 'resNu', 'resR', 'resMus']
+          break;
+        default:
+          paramsList =['lod', 'face', 'tile', 'textureType'] ;
+      }
+      let paramsEq = paramsList.map(k=>params[k] == pr[k]).reduce((a,b)=>a&&b, true);
+      console.log(planet.uuid === pl.uuid && paramsEq)
       return planet.uuid === pl.uuid && paramsEq
     }
   }
