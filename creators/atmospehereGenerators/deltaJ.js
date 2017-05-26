@@ -26,7 +26,10 @@ export function getDeltaJPixel(planetProps, transmittanceTexture, deltaETexture,
   const deltaSR = tableLookup(texture4DGetter(deltaSRTexture, [resMus, resNu, resMu, resR],4), planetProps);
   const deltaSM = tableLookup(texture4DGetter(deltaSMTexture, [resMus, resNu, resMu, resR],4), planetProps);
 
+  console.warn("ZERO DELTA J");
   return (precalculations, iteration)=>{
+    return [0,0,0,0];
+
     let {r,mu, muS, nu} = precalculations;
     let dj = deltaJ(r, mu, muS, nu, iteration)
     return [...dj, 0];

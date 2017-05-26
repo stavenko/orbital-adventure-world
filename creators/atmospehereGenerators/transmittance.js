@@ -1,67 +1,81 @@
-import {mulS, limit} from './utils.js';
+import {mulS, 
+  limit, 
+  getTransmittanceResolution, 
+  unitRangeFromTextureCoord,
+  clampCosine,
+  safeSqrt,
+  clampDistance,
+  getProfileDensity,
+  assert,
+  clamp,
+  rangeCheck,
+  GetRMuFromTransmittanceTextureUv,
+  DistanceToTopAtmosphereBoundary
+} from './utils.js';
 
-export function transmittanceRMu(t,s, planetProperties, linear = false){
-  let radius = planetProperties.phisical.radius;
-  let atmosphereHeight = planetProperties.phisical.atmosphereHeight;
+const sqrt = Math.sqrt;
+const exp = Math.exp;
 
-  if(radius  === undefined)
-    debugger;
-  let r, mu;
-  if(!linear){
-    r  = radius + (s*s) * (atmosphereHeight);
-    mu = -0.15 + Math.tan(1.5 * t)/Math.tan(1.5) * (1.0 - 0.15);
-  }else{
-    r = radius + s * atmosphereHeight;
-    mu = -0.15 + t * (1.0 +0.15);
+
+
+
+function computeOpticalLengthToTopAtmosphereBoundary(planetProps, profile, r, mu) {
+  let {topRadius, bottomRadius} = planetProps;
+  r = clamp(r, bottomRadius, topRadius);
+  rangeCheck(r, bottomRadius, topRadius, 'R check in optical depth');
+  rangeCheck(mu,-1.0,1.0, 'Mu check');
+  // Number of intervals for the numerical integration.
+  const SAMPLE_COUNT = 500;
+  // The integration step, i.e. the length of each integration interval.
+  let dx = DistanceToTopAtmosphereBoundary(planetProps, r, mu) / SAMPLE_COUNT;
+  // Integration loop.
+  let result = 0.0;
+  for (let i = 0; i <= SAMPLE_COUNT; ++i) {
+    let d_i = i * dx;
+    // Distance between the current sample point and the planet center.
+    let r_i = sqrt(d_i * d_i + 2.0 * r * mu * d_i + r * r);
+    // Number density at the current sample point (divided by the number density
+    // at the bottom of the atmosphere, yielding a dimensionless number).
+    let y_i = getProfileDensity(profile, r_i - bottomRadius);
+    // Sample weight (from the trapezoidal rule).
+    let weight_i = i == 0 || i == SAMPLE_COUNT ? 0.5 : 1.0;
+    result += y_i * weight_i * dx;
   }
-
-  return [r, mu];
-
+  return result;
 }
 
+function computeTransmittanceToTopAtmospehereBoundary(planetProps, r, mu){
+  let {bottomRadius, topRadius} = planetProps;
+  // rangeCheck(r, bottomRadius, topRadius);
+  assert(mu >= -1 && mu <= 1, 'Incorrect Mu');
+  let {
+    rayleighScattering, 
+    mieExtinction, 
+    absorptionExtinction,
+    rayleighDensity,
+    mieDensity,
+    absorptionDensity
+  } = planetProps;
 
-export function opticalDepth(H,r, mu, planetProperties){
-
-  let {TransmittanceSamples} = planetProperties;
-  let {radius} = planetProperties.phisical;
-  let dx = limit(r, mu, planetProperties) / TransmittanceSamples
-  let xi = 0.0;
-  let yi = Math.exp(-(r-radius) / H);
-  let result = 0;
-
-  for(let i =0; i < TransmittanceSamples; ++i){
-    let xj = i * dx;
-    let yj = Math.exp(-(Math.sqrt(r*r + xj*xj + 2.0*xj*r*mu) - radius) / H);
-    result += (yi*yj) / 2.0 * dx; 
-    xi =xj;
-    yi =yj
-  }
-  let rr = radius / r;
-  return mu < -Math.sqrt(1.0 - rr*rr)? 1e9: result
-}
-
-
-export function getTransmittenceColor({s,t}, planetProperties, useFourPacking=false){
-  let {phisical} = planetProperties;
-  let {betaR, betaMSca, HR, HM} = phisical;
-  let [r, mu] = transmittanceRMu(s,t, planetProperties);
-  let betaMEx = mulS(betaMSca, 1/0.9);
-  let od1 = opticalDepth(HR, r, mu, planetProperties)
-  let od = opticalDepth(HM, r, mu, planetProperties)
-
-
-  let betaRDepth = mulS(betaR, opticalDepth(HR, r, mu, planetProperties));
-  let betaMExDepth = mulS(betaMEx, opticalDepth(HM, r, mu, planetProperties));
-
-  let depth = [
-    Math.exp(-(betaRDepth[0] + betaMExDepth[0])),
-    Math.exp(-(betaRDepth[1] + betaMExDepth[1])),
-    Math.exp(-(betaRDepth[2] + betaMExDepth[2])),0
+  let rayd = computeOpticalLengthToTopAtmosphereBoundary(planetProps, rayleighDensity, r, mu);
+  let mie = computeOpticalLengthToTopAtmosphereBoundary(planetProps, mieDensity, r, mu);
+  let absorp = computeOpticalLengthToTopAtmosphereBoundary(planetProps, absorptionDensity, r, mu);
+  let ray = mulS(rayleighScattering, rayd);
+  mie = mulS(mieExtinction, mie);
+  absorp = mulS(absorptionExtinction, absorp);
+  return [
+    exp(-(ray[0] + mie[0] + absorp[0])),
+    exp(-(ray[1] + mie[1] + absorp[1])),
+    exp(-(ray[2] + mie[2] + absorp[2])),
+    0
   ];
+}
 
-  if(!useFourPacking)
-    return depth;
+export function getTransmittenceColor({s,t}, planetProps){
 
-  throw "Implement 4 component packing";
+  let {r,mu} = GetRMuFromTransmittanceTextureUv(planetProps, s,t);
+  let result = computeTransmittanceToTopAtmospehereBoundary(planetProps, r, mu);
+
+  return result;
 }
 

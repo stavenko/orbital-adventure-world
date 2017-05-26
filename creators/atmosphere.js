@@ -3,6 +3,11 @@ import fs from 'fs';
 import {getAtmosphereTextureFileName} from '../utils.js';
 import {generateAtmosphere} from './atmospehereGenerators/generator.js';
 import * as zipper from './zipper';
+export const atmosphereTextures=[
+'transmittanceTexture',
+'deltaIrradianceTexture',
+'scatteringTexture'
+]
 
 export function getRequirements(params){
   return [];

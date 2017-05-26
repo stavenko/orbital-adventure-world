@@ -1,8 +1,20 @@
 import {mulS, dot, Transmittance,
   tableLookup,
   texture4DGetter,
-  phaseFunctionMie, phaseFunctionRay,
-  vadd
+  texture2DGetter,
+  getIrradianceResolution,
+  getTransmittanceResolution,
+  GetUnitRangeFromTextureCoord,  
+  clampCosine,
+  phaseFunctionMie, 
+  phaseFunctionRay,
+  vadd,
+  vmul1,
+  GetTransmittanceToTopAtmosphereBoundary,
+  nanCheck,
+  rangeCheck,
+  assert,
+  clamp
 } from './utils.js';
 
 const sqrt = Math.sqrt;
@@ -69,7 +81,45 @@ export function getDeltaEIterativeColor(planetProps, deltaSRTexture, deltaSMText
   }
 }
 
-export function getDeltaEColor({i,j,W,H}, planetProperties, transmittanceTexture){
+
+function ComputeDirectIrradiance(planetProps, transmittanceGetter, r, mu_s) {
+  let {bottomRadius, topRadius} = planetProps;
+  r = clamp(r, bottomRadius, topRadius);
+  rangeCheck(r, bottomRadius, topRadius, 'R check');
+  rangeCheck(mu_s,-1.0,1.0, 'MuS check');
+  let {solarIrradiance} = planetProps;
+  let tr = GetTransmittanceToTopAtmosphereBoundary(planetProps, transmittanceGetter, r, mu_s);
+  let result = vmul1(solarIrradiance, tr);
+  result = mulS(result, max(mu_s, 0.0));
+  
+  nanCheck(result,()=>{
+    console.log(r, mu_s, tr, solarIrradiance);
+    throw new Error("nan or null values");
+  });
+
+  return result;
+}
+
+function GetRMuSFromIrradianceTextureUv(planetProps, u, v){
+  let {topRadius, bottomRadius} = planetProps;
+  assert(u >= 0.0 && u <= 1.0);
+  assert(v >= 0.0 && v <= 1.0);
+  let [Width, Height] = getIrradianceResolution(planetProps);
+  let x_mu_s = GetUnitRangeFromTextureCoord(u, Width);
+  let x_r = GetUnitRangeFromTextureCoord(v, Height);
+  let r = bottomRadius + x_r * (topRadius - bottomRadius);
+  let mu_s = clampCosine(2.0 * x_mu_s - 1.0);
+  return {mu_s, r};
+}
+
+export function getDeltaIrradiance({s,t}, planetProps, transmittanceTexture){
+
+  let res = getTransmittanceResolution(planetProps);
+  let transmittanceGetter = texture2DGetter(transmittanceTexture,res, 4);
+  let {mu_s, r} = GetRMuSFromIrradianceTextureUv( planetProps, s,t);
+  return ComputeDirectIrradiance(planetProps, transmittanceGetter, r, mu_s);
+
+  /*
   let {radius, atmosphereHeight} = planetProperties.phisical;
   let {resMu, resR}  = planetProperties;
   let tg = new Transmittance(transmittanceTexture, radius, atmosphereHeight, resMu, resR); 
@@ -84,6 +134,7 @@ export function getDeltaEColor({i,j,W,H}, planetProperties, transmittanceTexture
     let muS = -0.2 + (i - 0.5) / (W-1) * (1.0 + 0.2);
     return[r,muS]
   }
+ */
 }
 
 function isNotZero(v){

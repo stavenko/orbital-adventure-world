@@ -8,16 +8,13 @@ import * as HM from './creators/heightmap.js';
 import * as NM from './creators/normal.js';
 import * as AA from './creators/atmosphere.js';
 
+let atmCreators = {};
+AA.atmosphereTextures.forEach(t=>{atmCreators[t] = AA})
+
 const CREATORS = {
   'normal': NM,
   'height': HM,
-  'irradianceTexture':AA,
-  'inscatterTexture':AA,
-  'deltaSRTexture':AA,
-  'deltaSMTexture':AA,
-  'deltaJTexture':AA,
-  'deltaETexture':AA,
-  'transmittanceTexture':AA
+  ...atmCreators
 }
 
 const TextureSize = 2048

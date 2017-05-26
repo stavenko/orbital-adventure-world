@@ -10,7 +10,166 @@ const exp = Math.exp;
 const pow = Math.pow;
 const mieG = 0.8;
 
-// let FM = new FMath();
+
+export function GetTransmittanceToTopAtmosphereBoundary( planetProps, transmittanceGetter, r, mu) {
+  let {bottomRadius, topRadius} = planetProps;
+  r = clamp(r, bottomRadius, topRadius);
+  rangeCheck(r, bottomRadius, topRadius, 'R check to top atm b');
+  rangeCheck(mu, -1.0,1.0, 'MuS check');
+  let [Width, Height] = getTransmittanceResolution(planetProps);
+  let uv = GetTransmittanceTextureUvFromRMu(planetProps, r, mu);
+  let pixel = transmittanceGetter(uv);
+  if(pixel.length == 0){
+    console.log(uv, Width, Height, r, mu);
+    throw new Error("empty transmittance")
+  }
+  nanCheck(pixel);
+  return pixel;
+}
+export function clampRadius(planetProps, r) {
+  return clamp(r, planetProps.bottomRadius, planetProps.topRadius);
+}
+
+export function GetTransmittanceTextureUvFromRMu(planetProps, r, mu){
+  let {topRadius, bottomRadius} = planetProps;
+  r = clamp(r, bottomRadius, topRadius);
+  rangeCheck(r, bottomRadius, topRadius);
+  rangeCheck(mu, -1, 1);
+  let [Width, Height] = getTransmittanceResolution(planetProps);
+
+  let H = sqrt(topRadius * topRadius - bottomRadius * bottomRadius);
+  // Distance to the horizon.
+  let rho = safeSqrt(r * r - bottomRadius * bottomRadius);
+  // Distance to the top atmosphere boundary for the ray (r,mu), and its minimum
+  // and maximum values over all mu - obtained for (r,1) and (r,mu_horizon).
+  let d = DistanceToTopAtmosphereBoundary(planetProps, r, mu);
+  let d_min = topRadius - r;
+  let d_max = rho + H;
+  let x_mu = (d - d_min) / (d_max - d_min);
+  let x_r = rho / H;
+  let u = GetTextureCoordFromUnitRange(x_mu, Width);
+  let v = GetTextureCoordFromUnitRange(x_r, Height)
+  //if(u <0 || u > 1 || v <0 || v > 1){
+    //console.log('ALARM', x_mu, Width, x_r, Height, d, H, rho, r, mu);
+    //throw new Error("Incorrect uvs");
+  //}
+  return vec2(clamp(u,0,1) , clamp(v, 0, 1));
+}
+
+function vec2(x,y){
+  return [x,y];
+}
+
+export function DistanceToBottomAtmosphereBoundary(planetProps, r, mu) {
+  let {topRadius, bottomRadius} = planetProps;
+  if(r < bottomRadius) throw new Error("incorrect r")
+  let discriminant = r * r * (mu * mu - 1.0) +
+      bottomRadius * bottomRadius;
+  let distance = clampDistance(-r * mu - safeSqrt(discriminant));
+  if(isNaN(distance))
+     throw `Nan results distance:${distance}`;
+  return distance;
+}
+export function DistanceToTopAtmosphereBoundary(planetProps, r, mu) {
+  let {topRadius, bottomRadius} = planetProps;
+  if(r > topRadius) throw new Error("incorrect r")
+  let discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius;
+  let distance = clampDistance(-r * mu + safeSqrt(discriminant));
+  if(isNaN(distance))
+     throw `Nan results distance:${distance}`;
+  return distance
+}
+
+export function GetRMuFromTransmittanceTextureUv(planetProps, u, v){
+  assert(u >= 0 && u <= 1.0, 'Incorrect uv range')
+  assert(v >= 0 && v <= 1.0, 'Incorrect uv range')
+  let {topRadius, bottomRadius} = planetProps;
+
+  let [Width,Height] = getTransmittanceResolution(planetProps);
+  let xMu = GetUnitRangeFromTextureCoord(u,Width);
+  let xR  = GetUnitRangeFromTextureCoord(v,Height);
+
+  let H = sqrt(topRadius * topRadius - bottomRadius * bottomRadius);
+  // Distance to the horizon, from which we can compute r:
+  let rho = H * xR;
+  let r = sqrt(rho * rho + bottomRadius * bottomRadius);
+  //if(r > topRadius){
+    //console.log(r, topRadius, rho, xR, H);
+  //}
+  // Distance to the top atmosphere boundary for the ray (r,mu), and its minimum
+  // and maximum values over all mu - obtained for (r,1) and (r,mu_horizon) -
+  // from which we can recover mu:
+  let d_min = topRadius - r;
+  let d_max = rho + H;
+  let d = d_min + xMu * (d_max - d_min);
+  let mu = d == 0.0 ? 1.0 : (H * H - rho * rho - d * d) / (2.0 * r * d);
+  mu = clampCosine(mu);
+  if(isNaN(r) || isNaN(mu))
+     throw `Nan results r:${r}, mu:${mu}`;
+  return {mu,r}
+}
+
+export function nanCheck(arr, fn){
+  for(let i=0; i< arr.length; ++i){
+    if(isNaN(arr[i])) {
+      if(!fn) throw new Error(`nan value in array ${serializeArray(arr)}`);
+      fn();
+    }
+  }
+}
+
+function serializeArray(arr){
+  return JSON.stringify(arr);
+}
+export function rangeCheck(x, m, M, message="Range check warning"){
+  if(x < m || x > M)
+    console.warn(`${message}: ${m} < ${x} > ${M}`);
+}
+
+export function getLayerDensity(layer, altitude) {
+  let density = layer.exp_term * exp(layer.exp_scale * altitude) +
+      layer.linear_term * altitude + layer.constant_term;
+  return clamp(density, Number(0.0), Number(1.0));
+}
+
+export function getProfileDensity(profile, altitude) {
+  return altitude < profile[0].width ?
+      getLayerDensity(profile[0], altitude) :
+      getLayerDensity(profile[1], altitude);
+}
+export function clampDistance(d) {
+  return max(d, 0.0);
+}
+export function safeSqrt(a) {
+  return sqrt(max(a, 0.0));
+}
+
+export function clampCosine(mu){
+  return clamp(mu, -1.0, 1.0);
+}
+
+export function assert(cond, message = "Assertion failed") {
+  if(!cond) throw new Error(message);
+}
+
+export function getIrradianceResolution(planetProps){
+  let {resMus, resR} = planetProps;
+  return [resMus*2, resR/2];
+}
+
+export function getTransmittanceResolution(planetProps){
+  let {resMu, resR} = planetProps;
+  return [resMu*2, resR*2];
+
+}
+
+export function GetTextureCoordFromUnitRange( x,  texture_size) {
+  return 0.5 / texture_size + x * (1.0 - 1.0 / texture_size);
+}
+
+export function GetUnitRangeFromTextureCoord(u, textureSize){
+  return (u - 0.5 / textureSize) / (1.0 - 1.0 / textureSize);
+}
 
 export function phaseFunctionRay(mu) {
   return (3.0 / (16.0 * Math.PI)) * (1.0 + mu * mu);
@@ -159,6 +318,20 @@ export function tableLookup(getter, planetProps){
 
     return getter([uMus, uNu, uMu, uR]);
 
+  }
+}
+
+export function texture2DGetter(texture, dimensions, components){
+  let b = new Float32Array(2);
+  return uv=>{
+    b[0] = Math.floor((dimensions[0]-1) * uv[0]);
+    b[1] = Math.floor((dimensions[1]-1) * uv[1]);
+    let ix = components*(b[1] * dimensions[0] + b[0]);
+    if(ix < 0 || ix > texture.length || ix+components > texture.length)
+      console.log(ix, b, dimensions, components, texture.length);
+    if(!texture.subarray)
+      console.log(texture);
+    return texture.subarray(ix, ix+components);
   }
 }
 

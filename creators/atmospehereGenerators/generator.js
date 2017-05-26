@@ -2,11 +2,12 @@
 //import {Vector3} from 'three/src/math/Vector3';
 // import {Vector4} from 'three/src/math/Vector4';
 // import * as THREE from 'three/src/constants.js';
-import {precalcs} from './utils.js';
+import {getTransmittanceResolution, getIrradianceResolution, precalcs} from './utils.js';
 import {getTransmittenceColor} from './transmittance.js';
-import {getDeltaEColor, getDeltaEIterativeColor} from './deltaESampler.js';
+import {getDeltaIrradiance} from './irradiance.js';
 import {getDeltaJPixel} from './deltaJ.js';
 import {getDeltaSMieColor, getDeltaSRayColor, getDeltaSRCopier, getDeltaSRIterativeColor,  Stats} from './deltaSR.js';
+import {computeSingleScattering} from './singleScattering.js'
 //import {DataTexture} from 'three/src/textures/DataTexture.js'
 
 export function prepareTexture2With(width, height, components, fn, Type = Float32Array){
@@ -211,7 +212,7 @@ function generateIterativeAtmosphere(planetProps,
   let deltaETexture = new Float32Array(initialDeltaETexture);
   let deltaSRTexture = new Float32Array(initialDeltaSRTexture); // 4d
   let irradianceTexture = new Float32Array(initialDeltaETexture.length);
-  let inscatterTexture = new Float32Array(width*atmosphereHeight*depth*count*4); // 4d
+  let inscatterTexture = new Float32Array(width*height*depth*count*4); // 4d
 
   let deltaJGetter = getDeltaJPixel(planetProps, transmittanceTexture, deltaETexture, deltaSRTexture, deltaSMTexture);
   let deltaEGetter = getDeltaEIterativeColor(planetProps, deltaSRTexture, deltaSMTexture);
@@ -275,17 +276,22 @@ export function generateAtmosphere(textureProperties, planetProperties){
   //   128    8      32      32
   let {resMu, resNu, resMus, resR} = textureProperties;
   let combinedProps = {...planetProperties, ...textureProperties};
+  let transmittanceRes = getTransmittanceResolution(combinedProps);
+  let irradianceRes = getIrradianceResolution(combinedProps);
 
-  let transmittanceTexture = prepareTexture2With(resMu*2, resR*2, 4,(s,t,i,j,W,H)=>{
+  let transmittanceTexture = prepareTexture2With(transmittanceRes[0], 
+                                                 transmittanceRes[1], 4,(s,t,i,j,W,H)=>{
     return getTransmittenceColor({s,t,i,j,W,H}, combinedProps, false);
   });
 
-  let deltaETexture = prepareTexture2With(resMus/2, resR*2, 4, (s,t,i,j,W,H)=>{
-    return getDeltaEColor({s,t,i,j,W,H}, combinedProps, transmittanceTexture.texture);
+  let deltaIrradianceTexture = prepareTexture2With(
+    irradianceRes[0], 
+    irradianceRes[1], 
+    4, (s,t,i,j,W,H)=>{
+    return getDeltaIrradiance({s,t}, combinedProps, transmittanceTexture.texture);
   });
 
-  debugger;
-
+  /*
   let pre = {};
   for(let k in precalcs){
     pre[k] = precalcs[k](combinedProps);
@@ -304,21 +310,24 @@ export function generateAtmosphere(textureProperties, planetProperties){
     let cl =  miePixelGetter(precalculations);
     return cl;
   })
+*/
 
+  let singleScattering = computeSingleScattering(combinedProps, transmittanceTexture.texture);
 
-  let calculated = generateIterativeAtmosphere(combinedProps, 
-                              transmittanceTexture.texture,
-                              deltaETexture.texture,
-                              SRTexture.texture,
-                              SMTexture.texture
-                             );
+  //let calculated = generateIterativeAtmosphere(combinedProps, 
+                              //transmittanceTexture.texture,
+                              //deltaETexture.texture,
+                              //SRTexture.texture,
+                              //SMTexture.texture
+                             //);
 
 
   return {
     transmittanceTexture,
-    deltaETexture,
-    deltaSRTexture: SRTexture,
-    deltaSMTexture: SRTexture,
-    ...calculated
+    deltaIrradianceTexture,
+    scatteringTexture:{texture: singleScattering.scatteringTexture}
+    //deltaSRTexture: SRTexture,
+    //deltaSMTexture: SRTexture,
+    //...calculated
   }
 }

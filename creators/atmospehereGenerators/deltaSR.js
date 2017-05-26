@@ -33,7 +33,9 @@ export function getDeltaSRCopier(planetProps, deltaSRTexture){
   let {resMu, resNu, resMus, resR} = planetProps;
   let deltaSRGetter = tableLookup(texture4DGetter(deltaSRTexture, [resMus, resNu, resMu, resR],4), planetProps);
 
+  console.log("WARN ZERO DELTA SR");
   return (precalculations)=>{
+    return [0,0,0,0];
     let {r,mu, muS, nu} = precalculations;
     let pixel = deltaSRGetter([r, mu, muS, nu]);
     let phase = phaseFunctionRay(nu);
@@ -53,7 +55,9 @@ export function getDeltaSRIterativeColor(planetProps, transmittanceTexture, delt
   let buffer = new Float32Array(3);
   let deltaJ = tableLookup(texture4DGetter(deltaJTexture, [resMus, resNu, resMu, resR],4), planetProps);
   let transmittanceGetter = new Transmittance(transmittanceTexture, radius, atmosphereHeight, resMu, resR);
+  console.log("WARN ZERO DELTA SR");
   return (precalculations, iteration)=>{
+    return [0,0,0,0];
     let {r,mu, muS, nu} = precalculations;
     let raymie = inscatter(r,mu,muS, nu);
     return raymie;
@@ -102,6 +106,7 @@ export function getDeltaSMieColor(planetProps, transmittanceTexture){
   let transmittanceGetter = new Transmittance(transmittanceTexture, radius, atmosphereHeight, resMu, resR);
 
   return precalculations=>{
+    return [0,0,0,0];
     let {r,mu, muS, nu} = precalculations;
     let mie = inscatter(r, mu, muS, nu, HM, betaMSca)
     if(vNan(mie)) debugger;
@@ -165,6 +170,7 @@ export function getDeltaSRayColor(planetProps, transmittanceTexture){
   let transmittanceGetter = new Transmittance(transmittanceTexture, radius, atmosphereHeight, resMu, resR);
 
   return precalculations=>{
+    return [0,0,0,0];
     let {r,mu, muS, nu} = precalculations;
     let rayleigh = inscatter(r, mu, muS, nu, HR, betaR);
     if(vNan(rayleigh)) debugger;
