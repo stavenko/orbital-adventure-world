@@ -2,12 +2,19 @@
 //import {Vector3} from 'three/src/math/Vector3';
 // import {Vector4} from 'three/src/math/Vector4';
 // import * as THREE from 'three/src/constants.js';
-import {getTransmittanceResolution, getIrradianceResolution, precalcs} from './utils.js';
+import {
+  getTransmittanceResolution, 
+  getIrradianceResolution, 
+  precalcs,
+  texture2DGetter,
+  texture4DGetter} from './utils.js';
 import {getTransmittenceColor} from './transmittance.js';
-import {getDeltaIrradiance} from './irradiance.js';
+import {getDeltaIrradiance, ComputeIndirectIrradianceTexture} from './irradiance.js';
 import {getDeltaJPixel} from './deltaJ.js';
 import {getDeltaSMieColor, getDeltaSRayColor, getDeltaSRCopier, getDeltaSRIterativeColor,  Stats} from './deltaSR.js';
 import {computeSingleScattering} from './singleScattering.js'
+import {computeScatteringDensity} from './scatteringDensity.js'
+import {ComputeMultipleScatteringTexture} from './multipleScattering.js'
 //import {DataTexture} from 'three/src/textures/DataTexture.js'
 
 export function prepareTexture2With(width, height, components, fn, Type = Float32Array){
@@ -273,6 +280,12 @@ function generateIterativeAtmosphere(planetProps,
 }
 
 export function generateAtmosphere(textureProperties, planetProperties){
+  console.log("OVERRIDE SOME DIMENSIONS FOR DEBUG PURPOSE")
+  textureProperties = {...textureProperties}
+  textureProperties.resR = 4;
+  textureProperties.resMu = 4;
+  textureProperties.resNu = 4;
+  textureProperties.resMus = 4;
   //   128    8      32      32
   let {resMu, resNu, resMus, resR} = textureProperties;
   let combinedProps = {...planetProperties, ...textureProperties};
@@ -291,26 +304,6 @@ export function generateAtmosphere(textureProperties, planetProperties){
     return getDeltaIrradiance({s,t}, combinedProps, transmittanceTexture.texture);
   });
 
-  /*
-  let pre = {};
-  for(let k in precalcs){
-    pre[k] = precalcs[k](combinedProps);
-  }
-
-
-  let rayPixelGetter = getDeltaSRayColor(combinedProps, transmittanceTexture.texture);
-  let miePixelGetter = getDeltaSMieColor(combinedProps, transmittanceTexture.texture);
-
-  let SRTexture = prepareTexture4With(resMus, resNu, resMu, resR, 4, pre, precalculations=>{
-    let cl =  rayPixelGetter(precalculations);
-    return cl;
-  })
-
-  let SMTexture = prepareTexture4With(resMus, resNu, resMu, resR, 4, pre, precalculations=>{
-    let cl =  miePixelGetter(precalculations);
-    return cl;
-  })
-*/
 
   let singleScattering = computeSingleScattering(combinedProps, transmittanceTexture.texture);
 
@@ -321,7 +314,55 @@ export function generateAtmosphere(textureProperties, planetProperties){
                               //SMTexture.texture
                              //);
 
+  //if(false){
+    const components = 4;
+    const ScatteringOrders = 4;
+    let irradianceTexture = new Float32Array(irradianceRes[0] * irradianceRes[1] * components);
 
+    // let {resMu, resNu, resR, resMus} = combinedProps;
+    let arraySize = resNu * resMu * resMus * resR * components;
+    let scatteringDensity = new Float32Array(arraySize);
+    let scatteringTexture = new Float32Array(arraySize);
+    let transmittanceGetter = texture2DGetter(transmittanceTexture.texture, transmittanceRes, components);
+    // console.log("WTF", irradianceTexture)
+    let irradianceGetter = texture2DGetter(irradianceTexture, irradianceRes, components);
+    let rayleighGetter = texture4DGetter(singleScattering.deltaRayleigh, [resMus, resNu, resMu, resR], 4)
+    let mieGetter = texture4DGetter(singleScattering.deltaMie, [resMus, resNu, resMu, resR], 4)
+    let multipleScatteringGetter = texture4DGetter(singleScattering.deltaRayleigh, [resMus, resNu, resMu, resR], 4)
+
+    if(!combinedProps.groundAlbedo)
+      combinedProps.groundAlbedo = 0.1;
+    if(!combinedProps.miePhaseFunctionG)
+      combinedProps.miePhaseFunctionG = 0.8;
+
+    for(let i = 2; i <= ScatteringOrders; ++i){
+      computeScatteringDensity(
+        combinedProps, 
+        scatteringDensity, 
+        transmittanceGetter, 
+        rayleighGetter, 
+        mieGetter, 
+        multipleScatteringGetter, 
+        irradianceGetter, i);
+
+      ComputeIndirectIrradianceTexture(
+        combinedProps, 
+        irradianceTexture, 
+        deltaIrradianceTexture.texture, 
+        rayleighGetter,
+        mieGetter,
+        multipleScatteringGetter, i)
+
+        ComputeMultipleScattering(
+          combinedProps,
+          singleScattering.deltaRayleigh,
+          scatteringTexture
+
+        )
+
+    }
+
+  //}
   return {
     transmittanceTexture,
     deltaIrradianceTexture,

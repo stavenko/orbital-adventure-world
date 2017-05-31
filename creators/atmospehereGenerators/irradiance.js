@@ -13,6 +13,7 @@ import {mulS, dot, Transmittance,
   GetTransmittanceToTopAtmosphereBoundary,
   nanCheck,
   rangeCheck,
+  ComputeIndirectIrradiance,
   assert,
   clamp
 } from './utils.js';
@@ -91,7 +92,6 @@ function ComputeDirectIrradiance(planetProps, transmittanceGetter, r, mu_s) {
   let tr = GetTransmittanceToTopAtmosphereBoundary(planetProps, transmittanceGetter, r, mu_s);
   let result = vmul1(solarIrradiance, tr);
   result = mulS(result, max(mu_s, 0.0));
-  
   nanCheck(result,()=>{
     console.log(r, mu_s, tr, solarIrradiance);
     throw new Error("nan or null values");
@@ -118,27 +118,30 @@ export function getDeltaIrradiance({s,t}, planetProps, transmittanceTexture){
   let transmittanceGetter = texture2DGetter(transmittanceTexture,res, 4);
   let {mu_s, r} = GetRMuSFromIrradianceTextureUv( planetProps, s,t);
   return ComputeDirectIrradiance(planetProps, transmittanceGetter, r, mu_s);
-
-  /*
-  let {radius, atmosphereHeight} = planetProperties.phisical;
-  let {resMu, resR}  = planetProperties;
-  let tg = new Transmittance(transmittanceTexture, radius, atmosphereHeight, resMu, resR); 
-
-  let [r, muS] = getIrradianceRMuS(i, j, W, H);
-  let transm = tg.getTransmittance([r,muS])
-  let deltaE =  mulS( transm, Math.max(muS, 0.0));
-  return [...deltaE, 0.0];
-
-  function getIrradianceRMuS(){
-    let r = radius + (j - 0.5) / (H-1) * atmosphereHeight;
-    let muS = -0.2 + (i - 0.5) / (W-1) * (1.0 + 0.2);
-    return[r,muS]
-  }
- */
 }
 
 function isNotZero(v){
   for(let c = 0; c < v.length; ++c)
     if(v[c] ==0) return false;
   return true;
+}
+const components = 4;
+
+export function ComputeIndirectIrradianceTexture(planetProps, irradianceTexture, deltaIrradianceTexture, singleRayleighGetter, singleMieGetter, multipleScatteringGetter, scatteringOrder){
+  let [Width, Height] = getIrradianceResolution(planetProps);
+  for(let i = 0; i< Width; ++i){
+    for(let j = 0; j < Height; ++j){
+      let s = i / (Width-1);
+      let t = j / (Height-1);
+      let {mu_s, r} = GetRMuSFromIrradianceTextureUv(planetProps, s,t);
+      let irradiance = ComputeIndirectIrradiance(planetProps, singleRayleighGetter, singleMieGetter, multipleScatteringGetter, r, mu_s, scatteringOrder);
+      let ix = components*(j * Width + i);
+
+      nanCheck(irradiance);
+      for(let c =0; c < 3; ++c){
+        irradianceTexture[ix +c] += irradiance[c];
+        deltaIrradianceTexture[ix+c] = irradiance[c];
+      }
+    }
+  }
 }

@@ -4,12 +4,378 @@ const Tan126 = Math.tan(1.26*1.1);
 const sqrt = Math.sqrt;
 const atan = Math.atan;
 const max = Math.max;
+const min = Math.min;
 const cos = Math.cos;
 const sin = Math.sin;
 const exp = Math.exp;
 const pow = Math.pow;
+const PI = Math.PI;
 const mieG = 0.8;
 
+const LerpIncrements2 = [
+  new Int32Array([0,0]),
+  new Int32Array([0,1]),
+  new Int32Array([1,0]),
+  new Int32Array([1,1]),
+];
+const LerpIncrements3 = [
+  new Int32Array([0,0,0]),
+  new Int32Array([0,0,1]),
+  new Int32Array([0,1,0]),
+  new Int32Array([0,1,1]),
+  new Int32Array([1,0,0]),
+  new Int32Array([1,0,1]),
+  new Int32Array([1,1,0]),
+  new Int32Array([1,1,1]),
+];
+const LerpIncrements4 = [
+  new Int32Array([0,0,0,0]),
+  new Int32Array([0,0,0,1]),
+  new Int32Array([0,0,1,0]),
+  new Int32Array([0,0,1,1]),
+  new Int32Array([0,1,0,0]),
+  new Int32Array([0,1,0,1]),
+  new Int32Array([0,1,1,0]),
+  new Int32Array([0,1,1,1]),
+  new Int32Array([1,0,0,0]),
+  new Int32Array([1,0,0,1]),
+  new Int32Array([1,0,1,0]),
+  new Int32Array([1,0,1,1]),
+  new Int32Array([1,1,0,0]),
+  new Int32Array([1,1,0,1]),
+  new Int32Array([1,1,1,0]),
+  new Int32Array([1,1,1,1]),
+];
+let LerpIncrements = [[],
+  [[0], [1]],
+  LerpIncrements2,
+  LerpIncrements3,
+  LerpIncrements4
+]
+
+export function normalize(v){
+  let u = new Float32Array(v.length);
+  let l2 = 0;
+  for(let i=0; i< v.length; ++i) l2 += v[i]*v[i];
+  let l = sqrt(l2);
+  for(let i =0; i<v.length; ++i) u[i] = v[i] / l
+  return u;
+}
+
+export function index4(counters, sizes){
+  return ((counters[0] * sizes[1] + counters[1])*sizes[2] + counters[2])*sizes[3] + counters[3];
+}
+
+function vmul(t, a, b){
+  for(let i =0; i< t.length; ++i) t[i] = a[i] + b[i];
+}
+
+export function ComputeMultipleScatteringTexture( planetProps, transmittanceGetter, scatteringDensityGetter, counters, sizes){
+  //Length r;
+  //Number mu;
+  //Number mu_s;
+  //bool ray_r_mu_intersects_ground;
+  let {r,mu, mu_s, nu, ray_r_mu_intersects_ground} =GetRMuMuSNuFromScatteringTextureFragCoord(planetProps, counters, sizes);
+  return ComputeMultipleScattering(atmosphere, transmittance_texture,
+      scattering_density_texture, r, mu, mu_s, nu,
+      ray_r_mu_intersects_ground);
+}
+export function DistanceToNearestAtmosphereBoundary(planetProps, r, mu, ray_r_mu_intersects_ground) {
+  if (ray_r_mu_intersects_ground) {
+    return DistanceToBottomAtmosphereBoundary(planetProps, r, mu);
+  } else {
+    return DistanceToTopAtmosphereBoundary(planetProps, r, mu);
+  }
+}
+
+function ComputeMultipleScattering( planetProps, transmittanceGetter, scatteringDensityGetter, r, mu, mu_s, nu, ray_r_mu_intersects_ground) {
+
+  // Number of intervals for the numerical integration.
+  const SAMPLE_COUNT = 50;
+  // The integration step, i.e. the length of each integration interval.
+  let dx = DistanceToNearestAtmosphereBoundary( planetProps, r, mu, ray_r_mu_intersects_ground) / SAMPLE_COUNT;
+  // Integration loop.
+  let rayleigh_mie_sum = [0,0,0,0]
+  for (let i = 0; i <= SAMPLE_COUNT; ++i) {
+    let d_i = i * dx;
+
+    // The r, mu and mu_s parameters at the current integration point (see the
+    // single scattering section for a detailed explanation).
+    let r_i = clampRadius(planetProps, sqrt(d_i * d_i + 2.0 * r * mu * d_i + r * r));
+    let mu_i = clampCosine((r * mu + d_i) / r_i);
+    let mu_s_i = clampCosine((r * mu_s + d_i * nu) / r_i);
+
+    // The Rayleigh and Mie multiple scattering at the current sample point.
+    let scat = GetScattering_( 
+      planetProps, 
+      scatteringDensityGetter, 
+      r_i, mu_i, mu_s_i, nu, ray_r_mu_intersects_ground)
+    let tr = GetTransmittance(planetProps, transmittanceGetter, r, mu, d_i, ray_r_mu_intersects_ground);
+
+    let rayleigh_mie_i = [0,0,0,0];
+    for(let cc = 0; cc < scat.length; ++cc)
+      rayleigh_mie_i[cc] = scat[cc] * tr[cc] * dx;
+    // Sample weight (from the trapezoidal rule).
+    let weight_i = (i == 0 || i == SAMPLE_COUNT) ? 0.5 : 1.0;
+    for(let cc = 0; cc < rayleigh_mie_sum.length; ++cc)
+    rayleigh_mie_sum[cc] += rayleigh_mie_i[cc] * weight_i;
+  }
+  return rayleigh_mie_sum;
+}
+
+function GetScattering_(planetProps, textureGetter, r,  mu,  mu_s,  nu, ray_r_mu_intersects_ground){
+  let uvwz = GetScatteringTextureUvwzFromRMuMuSNu(
+      planetProps, r, mu, mu_s, nu, ray_r_mu_intersects_ground);
+  let pixel = textureGetter(uvwz);
+  nanCheck(pixel)
+  return pixel;
+}
+export function RayleighPhaseFunction(nu) {
+  let k = 3.0 / (16.0 * PI );
+  return k * (1.0 + nu * nu);
+}
+
+export function MiePhaseFunction(g, nu) {
+  let k = 3.0 / (8.0 * PI) * (1.0 - g * g) / (2.0 + g * g);
+  return k * (1.0 + nu * nu) / pow(1.0 + g * g - 2.0 * g * nu, 1.5);
+}
+
+
+export function GetScattering(planetProps, textures, r,  mu,  mu_s,  nu, ray_r_mu_intersects_ground, scatteringOrder) {
+  if(scatteringOrder == 1){
+    let {singleRayGetter, singleMieGetter} = textures;
+    let rayleigh = GetScattering_( planetProps, singleRayGetter, r, mu, mu_s, nu, ray_r_mu_intersects_ground);
+    let mie = GetScattering_( planetProps, singleMieGetter, r, mu, mu_s, nu, ray_r_mu_intersects_ground);
+    let _ray = mulS(rayleigh, RayleighPhaseFunction(nu));
+    let _mie = mulS(mie, MiePhaseFunction(planetProps.miePhaseFunctionG, nu));
+    for(let i = 0; i< _ray.length; ++i){
+      _ray[i] += _ray[i];
+    }
+    return _ray;
+  }else{
+    let {scattering} = textures;
+    return GetScattering_(planetProps, scattering, r,  mu,  mu_s,  nu, ray_r_mu_intersects_ground)
+  }
+}
+
+function vec3(a,b,c){return new Float32Array([a,b,c])}
+
+export function ComputeIndirectIrradiance(planetProps, single_rayleigh_scattering_texture, single_mie_scattering_texture, multiple_scattering_texture, r, mu_s, scattering_order) {
+
+  const pi = Math.PI;
+  const SAMPLE_COUNT = 32;
+  const dphi = pi / SAMPLE_COUNT;
+  const dtheta = pi / SAMPLE_COUNT;
+
+  let result = [0,0,0,0];
+    
+  let omega_s = vec3(sqrt(1.0 - mu_s * mu_s), 0.0, mu_s);
+  for (let j = 0; j < SAMPLE_COUNT / 2; ++j) {
+    let theta = (Number(j) + 0.5) * dtheta;
+    let ray_r_theta_intersects_ground = RayIntersectsGround(planetProps, clampRadius(planetProps, r), cos(theta));
+    for (let i = 0; i < 2 * SAMPLE_COUNT; ++i) {
+      let phi = (i + 0.5) * dphi;
+      let omega = vec3(cos(phi) * sin(theta), sin(phi) * sin(theta), cos(theta));
+      let domega = (dtheta ) * (dphi ) * sin(theta);
+
+      let nu = dot(omega, omega_s);
+      let scattering = GetScattering(
+        planetProps, 
+        {
+          singleRayGetter: single_rayleigh_scattering_texture, 
+          singleMieGetter: single_mie_scattering_texture, 
+          scattering: multiple_scattering_texture
+        }, 
+        r, omega[2], 
+        mu_s, 
+        nu, 
+        ray_r_theta_intersects_ground,
+        scattering_order)
+      for(let cc =0; cc<3; ++cc)
+        result[cc] +=  scattering[cc] * omega[2] * domega;
+    }
+  }
+  return result;
+}
+
+function GetScatteringTextureUvwzFromRMuMuSNu( planetProps, r, mu, mu_s, nu, ray_r_mu_intersects_ground) {
+
+  let {topRadius, bottomRadius} = planetProps;
+  let {resR, resMus, resNu, resMu, muSMin} = planetProps;
+
+  // Distance to top atmosphere boundary for a horizontal ray at ground level.
+  let H = sqrt(topRadius * topRadius - bottomRadius * bottomRadius);
+  // Distance to the horizon.
+  let rho = safeSqrt(r * r - bottomRadius * bottomRadius);
+  let u_r = GetTextureCoordFromUnitRange(rho / H, resR);
+
+  // Discriminant of the quadratic equation for the intersections of the ray
+  // (r,mu) with the ground (see RayIntersectsGround).
+  let r_mu = r * mu;
+  let discriminant = r_mu * r_mu - r * r + bottomRadius * bottomRadius;
+  let u_mu;
+  if (ray_r_mu_intersects_ground) {
+    // Distance to the ground for the ray (r,mu), and its minimum and maximum
+    // values over all mu - obtained for (r,-1) and (r,mu_horizon).
+    let d = -r_mu - safeSqrt(discriminant);
+    let d_min = r - bottomRadius;
+    let d_max = rho;
+    u_mu = 0.5 - 0.5 * GetTextureCoordFromUnitRange(d_max == d_min ? 0.0 :
+        (d - d_min) / (d_max - d_min), resMu / 2);
+    if(isNaN(u_mu)){
+      console.log(d, d_min, d_max, (d - d_min) / (d_max - d_min),  GetTextureCoordFromUnitRange( (d - d_min) / (d_max - d_min), resMu / 2));
+      throw new Error("==============");
+    }
+  } else {
+    // Distance to the top atmosphere boundary for the ray (r,mu), and its
+    // minimum and maximum values over all mu - obtained for (r,1) and
+    // (r,mu_horizon).
+    let d = -r_mu + safeSqrt(discriminant + H * H);
+    let d_min = topRadius - r;
+    let d_max = rho + H;
+    u_mu = 0.5 + 0.5 * GetTextureCoordFromUnitRange(
+        (d - d_min) / (d_max - d_min), resMu / 2);
+    if(isNaN(u_mu)){
+      console.log(r, mu, r_mu, discriminant, H, bottomRadius, rho);
+      console.log(d, d_min, d_max, (d - d_min) / (d_max - d_min),  GetTextureCoordFromUnitRange( (d - d_min) / (d_max - d_min), resMu / 2));
+      throw new Error("--------");
+    }
+  }
+
+  let d = DistanceToTopAtmosphereBoundary( planetProps, bottomRadius, mu_s);
+  let d_min = topRadius - bottomRadius;
+  let d_max = H;
+  let a = (d - d_min) / (d_max - d_min);
+  let A =
+      -2.0 * muSMin * bottomRadius / (d_max - d_min);
+  let u_mu_s = GetTextureCoordFromUnitRange(
+      max(1.0 - a / A, 0.0) / (1.0 + a), resMus);
+
+  let u_nu = (nu + 1.0) / 2.0;
+  nanCheck(vec4(u_nu, u_mu_s, u_mu, u_r),()=>{
+    console.log(u_mu, u_r, resMu);
+    throw new Error("not good")
+  });
+
+  return vec4(u_nu, u_mu_s, u_mu, u_r);
+}
+function vec4(a,b,c,d){ return new Float32Array([a,b,c,d]);}
+
+export function GetTransmittance( planetProps, transmittanceGetter, r, mu, d, ray_r_mu_intersects_ground) {
+  let {topRadius, bottomRadius, muSMin} = planetProps;
+
+  rangeCheck(r, bottomRadius,topRadius);
+  rangeCheck(mu, -1.0, 1.0);
+  if(d < 0) throw new Error('Negative d:' + d);
+
+  let r_d = clampRadius(planetProps, sqrt(d * d + 2.0 * r * mu * d + r * r));
+  let mu_d = clampCosine((r * mu + d) / r_d);
+
+  if (ray_r_mu_intersects_ground) {
+    let t1 = GetTransmittanceToTopAtmosphereBoundary(
+            planetProps, transmittanceGetter, r_d, -mu_d);
+    let t2 = GetTransmittanceToTopAtmosphereBoundary(
+            planetProps, transmittanceGetter, r, -mu);
+    let t = vdiv(t1, t2)
+    let tr =  vmin( t , [1,1,1]);
+    nanCheck(tr, ()=>{
+      console.log(tr, t1, t2, t);
+      throw new Error('err intersect');
+    });
+    return tr;
+  } else {
+    let t1 = GetTransmittanceToTopAtmosphereBoundary(
+            planetProps, transmittanceGetter, r, mu);
+    let t2 = GetTransmittanceToTopAtmosphereBoundary(
+            planetProps, transmittanceGetter, r_d, mu_d);
+    let t = vdiv(t1, t2);
+    let tr = vmin(t, [1,1,1]);
+    nanCheck(tr, ()=>{
+      console.log(tr, t1, t2, t);
+      throw new Error('err not intersect');
+    });
+    return tr;
+  }
+}
+export function GetRMuMuSNuFromScatteringTextureUvwz(planetProps, uvwz) {
+  // x,0 - mus
+  // y,1 - nu
+  // z,2 - mu
+  // w,3 - r
+  let {topRadius, bottomRadius, muSMin} = planetProps;
+  let {resMu, resNu, resMus, resR} = planetProps;
+  //assert(uvwz[0] >= 0.0 && uvwz[0] <= 1.0);
+  //assert(uvwz[1] >= 0.0 && uvwz[1] <= 1.0);
+  //assert(uvwz[2] >= 0.0 && uvwz[2] <= 1.0);
+  //assert(uvwz[3] >= 0.0 && uvwz[3] <= 1.0);
+  if(!muSMin) throw new Error("mu s min is not correct");
+  let ray_r_mu_intersects_ground;
+
+  // Distance to top atmosphere boundary for a horizontal ray at ground level.
+  let H = sqrt(topRadius * topRadius - bottomRadius * bottomRadius);
+  // Distance to the horizon.
+  let rho = H * GetUnitRangeFromTextureCoord(uvwz[3], resR);
+  let r = sqrt(rho * rho + bottomRadius * bottomRadius);
+  let mu;
+
+  if (uvwz[2] < 0.5) {
+    // Distance to the ground for the ray (r,mu), and its minimum and maximum
+    // values over all mu - obtained for (r,-1) and (r,mu_horizon) - from which
+    // we can recover mu:
+    let d_min = r - bottomRadius;
+    let d_max = rho;
+    let d = d_min + (d_max - d_min) * GetUnitRangeFromTextureCoord(
+        1.0 - 2.0 * uvwz[2], resMu / 2);
+    mu = d == 0.0 ? -1.0 :
+        clampCosine(-(rho * rho + d * d) / (2.0 * r * d));
+    ray_r_mu_intersects_ground = true;
+  } else {
+    // Distance to the top atmosphere boundary for the ray (r,mu), and its
+    // minimum and maximum values over all mu - obtained for (r,1) and
+    // (r,mu_horizon) - from which we can recover mu:
+    let d_min = topRadius - r;
+    let d_max = rho + H;
+    let d = d_min + (d_max - d_min) * GetUnitRangeFromTextureCoord(
+        2.0 * uvwz[2] - 1.0, resMu / 2);
+    mu = d == 0.0  ? 1.0 :
+        clampCosine((H * H - rho * rho - d * d) / (2.0 * r * d));
+    ray_r_mu_intersects_ground = false;
+  }
+
+  let x_mu_s = GetUnitRangeFromTextureCoord(uvwz[0], resMus);
+  let d_min = topRadius - bottomRadius;
+  let d_max = H;
+  let A = -2.0 * muSMin * bottomRadius / (d_max - d_min);
+  let a = (A - x_mu_s * A) / (1.0 + x_mu_s * A);
+  let d = d_min + min(a, A) * (d_max - d_min);
+  let mu_s = d == 0.0  ? 1.0 :
+     clampCosine((H * H - d * d) / (2.0 * bottomRadius * d));
+
+  let nu = clampCosine(uvwz[1] * 2.0 - 1.0);
+  nanCheck([mu, mu_s, nu, r]);
+  return {mu, mu_s, nu, r, ray_r_mu_intersects_ground}
+}
+
+export function GetRMuMuSNuFromScatteringTextureFragCoord(planetProps, counters, sizes) {
+  let uvwz = new Float32Array(4);
+  for(let i =0; i<counters.length;  ++i){
+    uvwz[i] = counters[i] / sizes[i];
+  }
+
+  let C = GetRMuMuSNuFromScatteringTextureUvwz(planetProps, uvwz);
+  // Clamp nu to its valid range of values, given mu and mu_s.
+  let {nu, mu, mu_s} = C;
+  C.nu = clamp(nu, mu * mu_s - sqrt((1.0 - mu * mu) * (1.0 - mu_s * mu_s)),
+      mu * mu_s + sqrt((1.0 - mu * mu) * (1.0 - mu_s * mu_s)));
+  return C;
+}
+export function RayIntersectsGround(planetProps, r, mu) {
+  let {topRadius, bottomRadius, muSMin} = planetProps;
+  if(r < bottomRadius) throw new Error("r is negative", r);
+  rangeCheck(mu, -1, 1);
+  return mu < 0.0 && r * r * (mu * mu - 1.0) +
+      bottomRadius * bottomRadius >= 0.0 ;
+}
 
 export function GetTransmittanceToTopAtmosphereBoundary( planetProps, transmittanceGetter, r, mu) {
   let {bottomRadius, topRadius} = planetProps;
@@ -80,6 +446,26 @@ export function DistanceToTopAtmosphereBoundary(planetProps, r, mu) {
   return distance
 }
 
+export function GetIrradiance( planetProps, irradianceGetter, r, mu_s) {
+  let uv = GetIrradianceTextureUvFromRMuS(planetProps, r, mu_s);
+
+  nanCheck(uv);
+  return irradianceGetter(uv);
+}
+
+export function GetIrradianceTextureUvFromRMuS(planetProps, r, mu_s) {
+  let {bottomRadius, topRadius} = planetProps;
+  let x_r = (r - bottomRadius) / (topRadius - bottomRadius);
+  let x_mu_s = mu_s * 0.5 + 0.5;
+  let [Wi, Hi] = getIrradianceResolution(planetProps);
+  let x = GetTextureCoordFromUnitRange(x_mu_s, Wi);
+  let y = GetTextureCoordFromUnitRange(x_r, Hi);
+  nanCheck([x,y],()=>{
+    console.log(mu_s);
+    throw new Error("aaaa")
+  })
+  return vec2(clamp(x, 0, 1) , clamp(y, 0, 1));
+}
 export function GetRMuFromTransmittanceTextureUv(planetProps, u, v){
   assert(u >= 0 && u <= 1.0, 'Incorrect uv range')
   assert(v >= 0 && v <= 1.0, 'Incorrect uv range')
@@ -189,7 +575,10 @@ export function vNan(v){
 }
 
 export function mulS(v, s){
-  return [v[0]*s, v[1]*s, v[2] * s];
+  if(v.length == 3)
+    return [v[0]*s, v[1]*s, v[2] * s];
+  if(v.length == 4)
+    return [v[0]*s, v[1]*s, v[2] * s, v[3] *s];
 }
 
 export function clamp(v, m, M){
@@ -217,9 +606,11 @@ export function vmul4(to, v1,v2){
 
 }
 export function vmul(to, v1,v2){
-  to[0] = v1[0] * v2[0];
-  to[1] = v1[1] * v2[1];
-  to[2] = v1[2] * v2[2];
+  for(let c = 0; c< to.length; ++c){
+    to[c] = v1[c] * v2[c];
+  }
+  //to[1] = v1[1] * v2[1];
+  //to[2] = v1[2] * v2[2];
 }
 export function vmul1( v1,v2){
   let to = new Float32Array(3);
@@ -321,39 +712,175 @@ export function tableLookup(getter, planetProps){
   }
 }
 
-export function texture2DGetter(texture, dimensions, components){
+export function texture2DGetter(texture, dimensions, components, interpolated = true){
   let b = new Float32Array(2);
+  let dims = dimensions.map(x=>x-1)
   return uv=>{
-    b[0] = Math.floor((dimensions[0]-1) * uv[0]);
-    b[1] = Math.floor((dimensions[1]-1) * uv[1]);
+    if(interpolated){
+      let coords = getInterpolatedCoords(uv, dimensions);
+      let pixel = new Float32Array(components);
+      for(let i =0;i<coords.length; ++i){
+        let ix = index(coords[i].coords);
+        let p = texture.subarray(ix, ix+components);
+        for(let c =0; c < components; ++c) 
+          pixel[c] += coords[i].lerper * p[c];
+      }
+      return pixel;
+    }else{
+      b[0] = Math.floor((dimensions[0]-1) * uv[0]);
+      b[1] = Math.floor((dimensions[1]-1) * uv[1]);
+      let ix = components*(b[1] * dimensions[0] + b[0]);
+      if(!texture.subarray)
+        console.log(texture);
+      return texture.subarray(ix, ix+components);
+
+    }
+  }
+
+  function index(b){
     let ix = components*(b[1] * dimensions[0] + b[0]);
     if(ix < 0 || ix > texture.length || ix+components > texture.length)
       console.log(ix, b, dimensions, components, texture.length);
-    if(!texture.subarray)
-      console.log(texture);
-    return texture.subarray(ix, ix+components);
+    return ix;
+
   }
 }
-
-export function texture4DGetter(texture, dimensions, components){
+export function texture4DGetter(texture, dimensions, components, interpolated = true){
   let b = new Float32Array(4);
+  let index = ixGetter(components);
   return coords=>{
-    vmul4(b, coords, dimensions);
-    let i = Math.floor(b[0]);
-    let j = Math.floor(b[1]);
-    let k = Math.floor(b[2]);
-    let r = Math.floor(b[3]);
-    let X = i*dimensions[1] + j;
-    let XX = X * dimensions[2]  + k
-    let ix =  components * (XX * dimensions[3] + r);
-    let color = texture.subarray(ix, ix+components);
-    if(color.length < components)
-      debugger;
-
-    return color;
+    if(interpolated){
+      let intr = getInterpolatedCoords(coords, dimensions);
+      let pixel = new Float32Array(components);
+      for(let i =0; i < intr.length; ++i){
+        let cc =  intr[i].coords;
+        let ix = index(...intr[i].coords);
+        let p = texture.subarray(ix, ix+components);
+        for(let c =0; c< components; ++c) 
+          pixel[c] += intr[i].lerper * p[c];
+      }
+      return pixel;
+    }else{
+      vmul4(b, coords, dimensions);
+      let i = Math.floor(b[0]);
+      let j = Math.floor(b[1]);
+      let k = Math.floor(b[2]);
+      let r = Math.floor(b[3]);
+      ix = index(i,j,k,r);
+      let color = texture.subarray(ix, ix+components);
+      if(color.length < components){
+        throw new Error("color too short "+  ix + ", " + texture.length + ", "+ components);
+      }
+      return color;
+    }
   }
 
+  function ixGetter(components){
+    return  (i,j,k,r)=>{
+      let X = i*dimensions[1] + j;
+      let XX = X * dimensions[2]  + k
+      let ix =  components * (XX * dimensions[3] + r);
+      return ix;
+    }
+  }
+
+
 }
+
+
+
+function getInterpolatedCoords(uv, dimensions, SZ){
+  if(!SZ) SZ = uv.length;
+  let coords = new Float32Array(SZ);
+  let dims = dimensions.map(x=>x-1);
+  vmul(coords, uv, dims);
+  let tCoords  = coords.map(x=>Math.floor(x));
+  let lerpCoords = new Float32Array(SZ);
+  for(let i = 0; i < SZ; ++i) lerpCoords[i] = coords[i] - tCoords[i];
+  let textureSelectors = [];
+  let LI = LerpIncrements[SZ];
+  for(let i = 0; i< LI.length; ++i){
+    let koefs = LI[i];
+    let C = new Float32Array(SZ);
+    let lerper = 1;
+    for(let j = 0; j < koefs.length; ++j){
+      let increaser = koefs[j];
+      if(tCoords[j] == dims[j]){ // final pixel assumed backwards
+        C[j] = tCoords[j] - increaser;
+        if(!increaser) lerper *= lerpCoords[j];
+        else lerper *= 1 - lerpCoords[j];
+      }else{
+        C[j] = tCoords[j] + increaser;
+        if(!increaser) lerper *= 1 - lerpCoords[j];
+        else lerper *= lerpCoords[j];
+      }
+    }
+    textureSelectors.push({coords: C, lerper});
+  }
+  return textureSelectors;
+}
+
+function getInterpolated2DCoords(uv, dimensions){
+  let coords = new Float32Array(2);
+  let dims = dimensions.map(x=>x-1);
+  vmul2(coords, uv, dims);
+  let tCoords  = coords.map(x=>Math.floor(x));
+  let lerpCoords = new Float32Array(2);
+  for(let i = 0; i < 2; ++i) lerpCoords[i] = coords[i] - tCoords[i];
+  let textureSelectors = [];
+  for(let i = 0; i< LerpIncrements.length; ++i){
+    let koefs = LerpIncrements2[i];
+    let C = new Float32Array[2];
+    let lerper = 1;
+    for(let j = 0; j < koefs.length; ++j){
+      let increaser = koefs[j];
+      if(tCoords[j] == dims[j]){ // final pixel assumed backwards
+        C[j] = tCoords[j] - increaser;
+        if(!increaser) lerper *= lerpCoords[j];
+        else lerper *= 1 - lerpCoords[j];
+      }else{
+        C[j] = tCoords[j] + increaser;
+        if(!increaser) lerper *= 1 - lerpCoords[j];
+        else lerper *= lerpCoords[j];
+      }
+    }
+    textureSelectors.push({coords: C, lerper});
+  }
+  return textureSelectors;
+
+
+}
+
+function getInterpolated4DCoords(uvwt, dimensions){
+  let coords = new Float32Array(4);
+  let dims = dimensions.map(x=>x-1);
+  vmul4(coords, uvwt, dims);
+  let tCoords  = coords.map(x=>Math.floor(x));
+  let lerpCoords = new Float32Array(4);
+  for(let i = 0; i < 4; ++i) lerpCoords[i] = coords[i] - tCoords[i];
+  let textureSelectors = [];
+  for(let i = 0; i< LerpIncrements.length; ++i){
+    let koefs = LerpIncrements[i];
+    let C = new Float32Array[4];
+    let lerper = 1;
+    for(let j = 0; j < koefs.length; ++j){
+      let increaser = koefs[j];
+      if(tCoords[j] == dims[j]){ // final pixel assumed backwards
+        C[j] = tCoords[j] - increaser;
+        if(!increaser) lerper *= lerpCoords[j];
+        else lerper *= 1 - lerpCoords[j];
+      }else{
+        C[j] = tCoords[j] + increaser;
+        if(!increaser) lerper *= 1 - lerpCoords[j];
+        else lerper *= lerpCoords[j];
+      }
+    }
+    textureSelectors.push({coords: C, lerper});
+  }
+  return textureSelectors;
+
+}
+
 export class Irradiance{
   constructor(texture, radius, atmosphereHeight, resMus, resR){
     this.texture = texture;

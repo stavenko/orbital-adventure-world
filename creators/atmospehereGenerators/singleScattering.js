@@ -11,24 +11,27 @@ import {
   GetTransmittanceToTopAtmosphereBoundary,
   DistanceToBottomAtmosphereBoundary,
   DistanceToTopAtmosphereBoundary,
-
+  GetTransmittance,
   getProfileDensity,
-  vmul1, vdiv,
-  assert
+  RayIntersectsGround,
+  GetRMuMuSNuFromScatteringTextureFragCoord, vmul1, vdiv,
+  assert,
+  DistanceToNearestAtmosphereBoundary
 } from './utils.js'
 
 const components = 4;
 const sqrt = Math.sqrt;
 const min = Math.min;
+let COUNTERS = {};
 export function computeSingleScattering(planetProps, transmittanceTexture){
   let transmittanceRes = getTransmittanceResolution(planetProps);
   let transmittanceGetter = texture2DGetter(transmittanceTexture, transmittanceRes, components);
   let {resMu, resNu, resR, resMus} = planetProps
 
   let arraySize = resNu * resMu * resMus * resR * components
-  let deltaRayleight = new Float32Array(arraySize);
+  let deltaRayleigh = new Float32Array(arraySize);
   let deltaMie = new Float32Array(arraySize);
-  let scattering = new Float32Array(arraySize);
+  let scatteringTexture = new Float32Array(arraySize);
   let counters = new Int32Array(4);
   let sizes = new Int32Array([resMus, resNu, resMu, resR]);
   for(;counters[0] < sizes[0]; ++counters[0]){
@@ -44,15 +47,18 @@ export function computeSingleScattering(planetProps, transmittanceTexture){
           nanCheck(delta_mie);
           nanCheck(scattering);
           for(let i=0; i<components;++i){
-            deltaRayleight[ix + i] = delta_rayleigh[i];
+            deltaRayleigh[ix + i] = delta_rayleigh[i];
             deltaMie[ix + i] = delta_mie[i];
-            scattering[ix + i] = scattering[i];
+            scatteringTexture[ix + i] = scattering[i];
           }
         }
       }
     }
   }
-  return {deltaRayleight, deltaMie, scatteringTexture:scattering};
+  let S = 0;
+  for(let i =0; i< scatteringTexture.length; ++i) S+= scatteringTexture[i];
+  if(S < 1) throw new Error("Total sum of scattering texture is less than 1", S);
+  return {deltaRayleigh, deltaMie, scatteringTexture};
 }
 
 function index4(counters, sizes){
@@ -67,82 +73,14 @@ function ComputeSingleScatteringTexture(planetProps, transmittanceGetter,
   return ComputeSingleScattering(planetProps, transmittanceGetter, coords);
 }
 
-function GetRMuMuSNuFromScatteringTextureFragCoord(planetProps, counters, sizes) {
-  let uvwz = new Float32Array(4);
-  for(let i =0; i<counters.length;  ++i){
-    uvwz[i] = counters[i] / sizes[i];
-  }
 
-  let C = GetRMuMuSNuFromScatteringTextureUvwz(planetProps, uvwz);
-  // Clamp nu to its valid range of values, given mu and mu_s.
-  let {nu, mu, mu_s} = C;
-  C.nu = clamp(nu, mu * mu_s - sqrt((1.0 - mu * mu) * (1.0 - mu_s * mu_s)),
-      mu * mu_s + sqrt((1.0 - mu * mu) * (1.0 - mu_s * mu_s)));
-  return C;
+
+function count_(val){
+  if(!COUNTERS[val] ) COUNTERS[val] = 1;
+  else COUNTERS[val]++;
 }
-
-function GetRMuMuSNuFromScatteringTextureUvwz(planetProps, uvwz) {
-  // x,0 - mus
-  // y,1 - nu
-  // z,2 - mu
-  // w,3 - r
-  let {topRadius, bottomRadius, muSMin} = planetProps;
-  let {resMu, resNu, resMus, resR} = planetProps;
-  assert(uvwz[0] >= 0.0 && uvwz[0] <= 1.0);
-  assert(uvwz[1] >= 0.0 && uvwz[1] <= 1.0);
-  assert(uvwz[2] >= 0.0 && uvwz[2] <= 1.0);
-  assert(uvwz[3] >= 0.0 && uvwz[3] <= 1.0);
-  if(!muSMin) throw new Error("mu s min is not correct");
-  let ray_r_mu_intersects_ground;
-
-  // Distance to top atmosphere boundary for a horizontal ray at ground level.
-  let H = sqrt(topRadius * topRadius - bottomRadius * bottomRadius);
-  // Distance to the horizon.
-  let rho = H * GetUnitRangeFromTextureCoord(uvwz[3], resR);
-  let r = sqrt(rho * rho + bottomRadius * bottomRadius);
-  let mu;
-
-  if (uvwz[2] < 0.5) {
-    // Distance to the ground for the ray (r,mu), and its minimum and maximum
-    // values over all mu - obtained for (r,-1) and (r,mu_horizon) - from which
-    // we can recover mu:
-    let d_min = r - bottomRadius;
-    let d_max = rho;
-    let d = d_min + (d_max - d_min) * GetUnitRangeFromTextureCoord(
-        1.0 - 2.0 * uvwz[2], resMu / 2);
-    mu = d == 0.0 ? -1.0 :
-        clampCosine(-(rho * rho + d * d) / (2.0 * r * d));
-    ray_r_mu_intersects_ground = true;
-  } else {
-    // Distance to the top atmosphere boundary for the ray (r,mu), and its
-    // minimum and maximum values over all mu - obtained for (r,1) and
-    // (r,mu_horizon) - from which we can recover mu:
-    let d_min = topRadius - r;
-    let d_max = rho + H;
-    let d = d_min + (d_max - d_min) * GetUnitRangeFromTextureCoord(
-        2.0 * uvwz[2] - 1.0, resMu / 2);
-    mu = d == 0.0  ? 1.0 :
-        clampCosine((H * H - rho * rho - d * d) / (2.0 * r * d));
-    ray_r_mu_intersects_ground = false;
-  }
-
-  let x_mu_s = GetUnitRangeFromTextureCoord(uvwz[0], resMus);
-  let d_min = topRadius - bottomRadius;
-  let d_max = H;
-  let A = -2.0 * muSMin * bottomRadius / (d_max - d_min);
-  let a = (A - x_mu_s * A) / (1.0 + x_mu_s * A);
-  let d = d_min + min(a, A) * (d_max - d_min);
-  let mu_s = d == 0.0  ? 1.0 :
-     clampCosine((H * H - d * d) / (2.0 * bottomRadius * d));
-
-  let nu = clampCosine(uvwz[1] * 2.0 - 1.0);
-  nanCheck([mu, mu_s, nu, r]);
-  return {mu, mu_s, nu, r, ray_r_mu_intersects_ground}
-}
-
 
 function ComputeSingleScattering( planetProps, transmittanceGetter, coords){
-
   let {
     topRadius, bottomRadius, 
     solarIrradiance, rayleighScattering, mieScattering
@@ -187,6 +125,12 @@ function ComputeSingleScattering( planetProps, transmittanceGetter, coords){
     rayleigh[i] = rayleigh_sum[i] * dx * solarIrradiance[i] * rayleighScattering[i];
     mie[i] = mie_sum[i] * dx * solarIrradiance[i] * mieScattering[i];
   }
+  rayleigh[3] = 0;
+  mie[3] = 0;
+  let S = rayleigh[0] + rayleigh[1] + rayleigh[2];
+  if(S == 0) count_("zero rayleigh");
+  else count_("non-zero rayleigh");
+
   nanCheck(rayleigh,()=>{
     console.log(rayleigh, rayleigh_sum, dx, solarIrradiance, rayleighScattering)
     throw new Error("Err");
@@ -195,13 +139,6 @@ function ComputeSingleScattering( planetProps, transmittanceGetter, coords){
   return {delta_rayleigh: rayleigh, delta_mie: mie};
 }
 
-function DistanceToNearestAtmosphereBoundary(planetProps, r, mu, ray_r_mu_intersects_ground) {
-  if (ray_r_mu_intersects_ground) {
-    return DistanceToBottomAtmosphereBoundary(planetProps, r, mu);
-  } else {
-    return DistanceToTopAtmosphereBoundary(planetProps, r, mu);
-  }
-}
 
 function ComputeSingleScatteringIntegrand( planetProps, transmittanceGetter, r, mu, mu_s, nu, d, ray_r_mu_intersects_ground){
 
@@ -242,48 +179,5 @@ function ComputeSingleScatteringIntegrand( planetProps, transmittanceGetter, r, 
   return {rayleigh_i: rayleigh, mie_i: mie};
 }
 
-function RayIntersectsGround(planetProps, r, mu) {
-  let {topRadius, bottomRadius, muSMin} = planetProps;
-  if(r < bottomRadius) throw new Error("r is negative");
-  rangeCheck(mu, -1, 1);
-  return mu < 0.0 && r * r * (mu * mu - 1.0) +
-      bottomRadius * bottomRadius >= 0.0 ;
-}
 
-function GetTransmittance( planetProps, transmittanceGetter, r, mu, d, ray_r_mu_intersects_ground) {
-  let {topRadius, bottomRadius, muSMin} = planetProps;
-
-  rangeCheck(r, bottomRadius,topRadius);
-  rangeCheck(mu, -1.0, 1.0);
-  if(d < 0) throw new Error('Negative d:' + d);
-
-  let r_d = clampRadius(planetProps, sqrt(d * d + 2.0 * r * mu * d + r * r));
-  let mu_d = clampCosine((r * mu + d) / r_d);
-
-  if (ray_r_mu_intersects_ground) {
-    let t1 = GetTransmittanceToTopAtmosphereBoundary(
-            planetProps, transmittanceGetter, r_d, -mu_d);
-    let t2 = GetTransmittanceToTopAtmosphereBoundary(
-            planetProps, transmittanceGetter, r, -mu);
-    let t = vdiv(t1, t2)
-    let tr =  vmin( t , [1,1,1]);
-    nanCheck(tr, ()=>{
-      console.log(tr, t1, t2, t);
-      throw new Error('err intersect');
-    });
-    return tr;
-  } else {
-    let t1 = GetTransmittanceToTopAtmosphereBoundary(
-            planetProps, transmittanceGetter, r, mu);
-    let t2 = GetTransmittanceToTopAtmosphereBoundary(
-            planetProps, transmittanceGetter, r_d, mu_d);
-    let t = vdiv(t1, t2);
-    let tr = vmin(t, [1,1,1]);
-    nanCheck(tr, ()=>{
-      console.log(tr, t1, t2, t);
-      throw new Error('err not intersect');
-    });
-    return tr;
-  }
-}
 
