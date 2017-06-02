@@ -6,7 +6,8 @@ import * as zipper from './zipper';
 export const atmosphereTextures=[
 'transmittanceTexture',
 'deltaIrradianceTexture',
-'scatteringTexture'
+'scatteringTexture',
+'irradianceTexture'
 ]
 
 export function getRequirements(params){

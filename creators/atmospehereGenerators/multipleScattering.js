@@ -1,4 +1,4 @@
-import {ComputeMultipleScatteringTexture} from './utils.js'
+import {ComputeMultipleScattering} from './utils.js'
 const components = 4;
 export function ComputeMultipleScatteringTexture(planetProps, delta_multiple_scattering, scattering, transmittanceGetter, scatteringDensityGetter, scattering_order){
 
@@ -12,11 +12,10 @@ export function ComputeMultipleScatteringTexture(planetProps, delta_multiple_sca
       for(counters[2] = 0;counters[2] < sizes[2]; ++counters[2]){
         for(counters[3] = 0;counters[3] < sizes[3]; ++counters[3]){
           let ix = components * index4(counters, sizes);
-          let scatteringComponent = ComputeMultipleScatteringTexture(
-            planetProps, 
-            transmittanceGetter, 
+          let scatteringComponent = ComputeMultipleScattering(
+            planetProps,
+            transmittanceGetter,
             scatteringDensityGetter, counters, sizes);
-          );
           nanCheck(scattering);
           for(let i=0; i<components;++i){
             delta_multiple_scattering[ix+c] =  scatteringComponent[c];
@@ -27,4 +26,3 @@ export function ComputeMultipleScatteringTexture(planetProps, delta_multiple_sca
     }
   }
 }
-

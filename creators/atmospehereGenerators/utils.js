@@ -70,7 +70,7 @@ function vmul(t, a, b){
   for(let i =0; i< t.length; ++i) t[i] = a[i] + b[i];
 }
 
-export function ComputeMultipleScatteringTexture( planetProps, transmittanceGetter, scatteringDensityGetter, counters, sizes){
+export function ComputeMultipleScattering( planetProps, transmittanceGetter, scatteringDensityGetter, counters, sizes){
   //Length r;
   //Number mu;
   //Number mu_s;
@@ -106,9 +106,9 @@ function ComputeMultipleScattering( planetProps, transmittanceGetter, scattering
     let mu_s_i = clampCosine((r * mu_s + d_i * nu) / r_i);
 
     // The Rayleigh and Mie multiple scattering at the current sample point.
-    let scat = GetScattering_( 
-      planetProps, 
-      scatteringDensityGetter, 
+    let scat = GetScattering_(
+      planetProps,
+      scatteringDensityGetter,
       r_i, mu_i, mu_s_i, nu, ray_r_mu_intersects_ground)
     let tr = GetTransmittance(planetProps, transmittanceGetter, r, mu, d_i, ray_r_mu_intersects_ground);
 
@@ -168,7 +168,7 @@ export function ComputeIndirectIrradiance(planetProps, single_rayleigh_scatterin
   const dtheta = pi / SAMPLE_COUNT;
 
   let result = [0,0,0,0];
-    
+
   let omega_s = vec3(sqrt(1.0 - mu_s * mu_s), 0.0, mu_s);
   for (let j = 0; j < SAMPLE_COUNT / 2; ++j) {
     let theta = (Number(j) + 0.5) * dtheta;
@@ -180,15 +180,15 @@ export function ComputeIndirectIrradiance(planetProps, single_rayleigh_scatterin
 
       let nu = dot(omega, omega_s);
       let scattering = GetScattering(
-        planetProps, 
+        planetProps,
         {
-          singleRayGetter: single_rayleigh_scattering_texture, 
-          singleMieGetter: single_mie_scattering_texture, 
+          singleRayGetter: single_rayleigh_scattering_texture,
+          singleMieGetter: single_mie_scattering_texture,
           scattering: multiple_scattering_texture
-        }, 
-        r, omega[2], 
-        mu_s, 
-        nu, 
+        },
+        r, omega[2],
+        mu_s,
+        nu,
         ray_r_theta_intersects_ground,
         scattering_order)
       for(let cc =0; cc<3; ++cc)
@@ -681,8 +681,8 @@ export function tableLookup(getter, planetProps){
 
     let rmu = r * mu;
     let delta = rmu * rmu - r * r + Rg * Rg;
-    let cst = rmu < 0.0 && delta > 0.0 
-      ? [1.0, 0.0, 0.0, 0.5 - 0.5 / resMu] 
+    let cst = rmu < 0.0 && delta > 0.0
+      ? [1.0, 0.0, 0.0, 0.5 - 0.5 / resMu]
       : [-1.0, H * H, H, 0.5 + 0.5 / resMu];
 
     let uR = 0.5 / resR + rho / H * (1 - 1 / resR);
@@ -693,10 +693,10 @@ export function tableLookup(getter, planetProps){
     // paper formula
     // float uMuS = 0.5 / float(RES_MU_S) + max((1.0 - exp(-3.0 * muS - 0.6)) / (1.0 - exp(-3.6)), 0.0) * (1.0 - 1.0 / float(RES_MU_S));
     // better formula
-    let uMus = 0.5 / resMus 
+    let uMus = 0.5 / resMus
       + (atan(max(muS, -0.1975) * Tan126) / 1.1 + (1.0 - 0.26)) * 0.5 * (1.0 - 1.0 / resMus);
 
-     
+
     let lerp = (nu + 1.0) / 2.0 * (resNu - 1.0);
     let uNu = Math.max((lerp ) / resNu, 0.0);
     if(uMus < 0 || uNu < 0 || uMu < 0 || uR < 0 || uMus > 1 || uNu > 1 || uMu > 1 || uR > 1 ||isNaN(uMus) || isNaN(uNu) || isNaN(uMu) || isNaN(uR)){
@@ -722,7 +722,7 @@ export function texture2DGetter(texture, dimensions, components, interpolated = 
       for(let i =0;i<coords.length; ++i){
         let ix = index(coords[i].coords);
         let p = texture.subarray(ix, ix+components);
-        for(let c =0; c < components; ++c) 
+        for(let c =0; c < components; ++c)
           pixel[c] += coords[i].lerper * p[c];
       }
       return pixel;
@@ -756,7 +756,7 @@ export function texture4DGetter(texture, dimensions, components, interpolated = 
         let cc =  intr[i].coords;
         let ix = index(...intr[i].coords);
         let p = texture.subarray(ix, ix+components);
-        for(let c =0; c< components; ++c) 
+        for(let c =0; c< components; ++c)
           pixel[c] += intr[i].lerper * p[c];
       }
       return pixel;
@@ -966,12 +966,12 @@ export class Transmittance{
     let Rg = this.radius;
     let Rt = Rg + this.atmosphereHeight;
     if(!this.linear){
-      
-      if(r >= Rg) 
+
+      if(r >= Rg)
         uR = Math.sqrt((r - Rg) / this.atmosphereHeight);
       uMu = Math.atan((mu + 0.15) * K) / 1.5;
     }else{
-      if(r >= Rg) 
+      if(r >= Rg)
         uR = (r - Rg) / (Rt - Rg);
       uMu = (mu + 0.15) / (1.15);
     }
@@ -1008,7 +1008,7 @@ export function precalculateR(planetProps) {
       :(k==(count-1))
         ?-0.001
         :0.0;
-    
+
     let w = k / (count-1);
     let r = Math.sqrt(_radiusSQR + w*w*(Rt*Rt - _radiusSQR)) + dr;
     let _rSQR = r*r;
