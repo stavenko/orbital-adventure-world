@@ -5,7 +5,7 @@ import {generateAtmosphere} from './atmospehereGenerators/generator.js';
 import * as zipper from './zipper';
 export const atmosphereTextures=[
 'transmittanceTexture',
-'deltaIrradianceTexture',
+'singleMieScatteringTexture',
 'scatteringTexture',
 'irradianceTexture'
 ]

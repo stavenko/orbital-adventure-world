@@ -76,8 +76,8 @@ export function ComputeMultipleScattering( planetProps, transmittanceGetter, sca
   //Number mu_s;
   //bool ray_r_mu_intersects_ground;
   let {r,mu, mu_s, nu, ray_r_mu_intersects_ground} =GetRMuMuSNuFromScatteringTextureFragCoord(planetProps, counters, sizes);
-  return ComputeMultipleScattering(atmosphere, transmittance_texture,
-      scattering_density_texture, r, mu, mu_s, nu,
+  return ComputeMultipleScatteringPixel(planetProps, transmittanceGetter,
+      scatteringDensityGetter, r, mu, mu_s, nu,
       ray_r_mu_intersects_ground);
 }
 export function DistanceToNearestAtmosphereBoundary(planetProps, r, mu, ray_r_mu_intersects_ground) {
@@ -88,7 +88,7 @@ export function DistanceToNearestAtmosphereBoundary(planetProps, r, mu, ray_r_mu
   }
 }
 
-function ComputeMultipleScattering( planetProps, transmittanceGetter, scatteringDensityGetter, r, mu, mu_s, nu, ray_r_mu_intersects_ground) {
+function ComputeMultipleScatteringPixel( planetProps, transmittanceGetter, scatteringDensityGetter, r, mu, mu_s, nu, ray_r_mu_intersects_ground) {
 
   // Number of intervals for the numerical integration.
   const SAMPLE_COUNT = 50;
@@ -113,8 +113,15 @@ function ComputeMultipleScattering( planetProps, transmittanceGetter, scattering
     let tr = GetTransmittance(planetProps, transmittanceGetter, r, mu, d_i, ray_r_mu_intersects_ground);
 
     let rayleigh_mie_i = [0,0,0,0];
-    for(let cc = 0; cc < scat.length; ++cc)
-      rayleigh_mie_i[cc] = scat[cc] * tr[cc] * dx;
+    for(let cc = 0; cc < scat.length; ++cc){
+      let t = tr[cc];
+      if(!t) t = 0;
+      rayleigh_mie_i[cc] = scat[cc] * t * dx;
+    }
+    nanCheck(rayleigh_mie_i, ()=>{
+      console.log(rayleigh_mie_i, scat, tr, dx);
+      throw new Error("null");
+    })
     // Sample weight (from the trapezoidal rule).
     let weight_i = (i == 0 || i == SAMPLE_COUNT) ? 0.5 : 1.0;
     for(let cc = 0; cc < rayleigh_mie_sum.length; ++cc)
@@ -127,7 +134,9 @@ function GetScattering_(planetProps, textureGetter, r,  mu,  mu_s,  nu, ray_r_mu
   let uvwz = GetScatteringTextureUvwzFromRMuMuSNu(
       planetProps, r, mu, mu_s, nu, ray_r_mu_intersects_ground);
   let pixel = textureGetter(uvwz);
-  nanCheck(pixel)
+  nanCheck(pixel, ()=>{
+    console.log(r,mu,mu_s, nu, ray_r_mu_intersects_ground, uvwz);
+  })
   return pixel;
 }
 export function RayleighPhaseFunction(nu) {
@@ -256,6 +265,7 @@ function GetScatteringTextureUvwzFromRMuMuSNu( planetProps, r, mu, mu_s, nu, ray
     console.log(u_mu, u_r, resMu);
     throw new Error("not good")
   });
+  u_mu = clamp(u_mu, 0, 1);
 
   return vec4(u_nu, u_mu_s, u_mu, u_r);
 }
@@ -433,7 +443,7 @@ export function DistanceToBottomAtmosphereBoundary(planetProps, r, mu) {
       bottomRadius * bottomRadius;
   let distance = clampDistance(-r * mu - safeSqrt(discriminant));
   if(isNaN(distance))
-     throw `Nan results distance:${distance}`;
+     throw new Error(`Nan results distance:${distance}`);
   return distance;
 }
 export function DistanceToTopAtmosphereBoundary(planetProps, r, mu) {
@@ -441,8 +451,10 @@ export function DistanceToTopAtmosphereBoundary(planetProps, r, mu) {
   if(r > topRadius) throw new Error("incorrect r")
   let discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius;
   let distance = clampDistance(-r * mu + safeSqrt(discriminant));
-  if(isNaN(distance))
-     throw `Nan results distance:${distance}`;
+  if(isNaN(distance)){
+    console.log('>>>>>>>>>>', r, mu, topRadius)
+     throw new Error(`Nan results distance:${distance}`);
+  }
   return distance
 }
 

@@ -49,8 +49,9 @@ export function computeScatteringDensity(planetProps, scatteringDensity, transmi
             irradianceGetter, 
             scattering_order, counters, sizes);
           nanCheck(scattering);
-          for(let i=0; i<components;++i){
+          for(let i=0; i< components;++i){
             scatteringDensity[ix + i] = scattering[i];
+            if(!scattering[i]) scatteringDensity[ix+i] = 0.0;
           }
         }
       }
@@ -58,7 +59,8 @@ export function computeScatteringDensity(planetProps, scatteringDensity, transmi
   }
   let S = 0;
   for(let i =0; i< scatteringDensity.length; ++i) S+= scatteringDensity[i];
-  if(S < 1) throw new Error("Total sum of scattering density is less than 1", S);
+  if(S < 1) 
+    console.warn(new Error("Total sum of scattering density is less than 1", S));
   return null;
 }
 
@@ -102,11 +104,7 @@ function ComputeScatteringDensity(planetProps, transmittanceGetter, singleRaylei
       transmittance_to_ground =
           GetTransmittance(planetProps, transmittanceGetter, r, cos_theta,
               distance_to_ground, ray_r_theta_intersects_ground);
-      ground_albedo = [
-        planetProps.groundAlbedo,
-        planetProps.groundAlbedo,
-        planetProps.groundAlbedo
-      ];
+      ground_albedo = planetProps.groundAlbedo;
     }
     nanCheck(ground_albedo, ()=>{
       console.log(ground_albedo, planetProps);

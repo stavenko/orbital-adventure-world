@@ -323,6 +323,7 @@ export function generateAtmosphere(textureProperties, planetProperties){
     let rayleighGetter = texture4DGetter(singleScattering.deltaRayleigh, [resMus, resNu, resMu, resR], 4)
     let mieGetter = texture4DGetter(singleScattering.deltaMie, [resMus, resNu, resMu, resR], 4)
     let multipleScatteringGetter = texture4DGetter(singleScattering.deltaRayleigh, [resMus, resNu, resMu, resR], 4)
+    let scatteringDensityGetter = texture4DGetter(scatteringDensity, [resMus, resNu, resMu, resR], 4);
 
     //if(!combinedProps.groundAlbedo)
       //combinedProps.groundAlbedo = 0.1;
@@ -355,11 +356,12 @@ export function generateAtmosphere(textureProperties, planetProperties){
           scatteringDensityGetter, i)
     }
 
-  return {
+  let textures = {
     transmittanceTexture,
-    deltaIrradianceTexture,
+    singleMieScatteringTexture: {texture:singleScattering.deltaMie},
     scatteringTexture:{texture: singleScattering.scatteringTexture},
-    irradianceTexture: irradianceTexture,
-
+    irradianceTexture: {texture:irradianceTexture},
   }
+  console.log(textures);
+  return textures;
 }
